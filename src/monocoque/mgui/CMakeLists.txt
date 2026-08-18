@@ -1,4 +1,12 @@
-
+set(mgui_source_files
+  addeditaction.c
+  addeditaction.h
+  testaction.c
+  testaction.h
+  uiconfighelper.c
+  uiconfighelper.h
+  mainwindow.h
+)
 
 set(NAPPGUI_DEMO NO CACHE BOOL "" FORCE)
 set(NAPPGUI_WEB False CACHE BOOL "Build NAppGUI WebView support.")
@@ -8,7 +16,7 @@ add_subdirectory(nappgui_src)
 set(CMAKE_BUILD_TYPE ${_saved_build_type})
 
 
-add_library(mgui STATIC ${gui_source_files} ${NAppGUI_SOURCE_DIR}/src)
+add_library(mgui STATIC ${mgui_source_files} ${NAppGUI_SOURCE_DIR}/src)
 set_property(TARGET mgui PROPERTY POSITION_INDEPENDENT_CODE ON)
 add_dependencies(mgui gui osapp osgui draw2d geom2d core osbs sewer encode)
 target_include_directories(mgui PUBLIC ${LIBXML_INCLUDE_DIR} ${NAppGUI_SOURCE_DIR}/src ${GTK3_INCLUDE_DIRS})

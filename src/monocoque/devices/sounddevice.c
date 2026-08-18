@@ -189,7 +189,7 @@ int sounddev_init(SoundDevice* sounddevice, const char* devname, SoundDeviceSett
     switch (sounddevice->m.hapticeffect.effecttype) {
         case (EFFECT_GEARSHIFT):
             sounddevice->sounddata.last_gear = 0;
-            sounddevice->sounddata.duration = sds.duration;
+            sounddevice->sounddata.duration = 0.125;
             streamname = "Gear";
             break;
         case (EFFECT_TYRESLIP):
@@ -283,8 +283,8 @@ SoundDevice* new_sound_device(DeviceSettings* ds, MonocoqueSettings* ms, SimInfo
 
     if(error == 0)
     {
-        slogt("Attempting to use sound device %s", ds->sounddevsettings.dev);
-        error = sounddev_init(this, ds->sounddevsettings.dev, ds->sounddevsettings);
+        slogt("Attempting to use sound device %s", ds->dev);
+        error = sounddev_init(this, ds->dev, ds->sounddevsettings);
     }
 
     if (error != 0)

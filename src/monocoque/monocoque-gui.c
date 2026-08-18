@@ -5,6 +5,10 @@
 #include <basedir_fs.h>
 #include <libconfig.h>
 
+#include "mgui/uiconfighelper.h"
+#include "mgui/addeditaction.h"
+#include "mgui/mainwindow.h"
+
 #include "gameloop/gameloop.h"
 #include "gameloop/loopdata.h"
 #include "gameloop/tachconfig.h"
@@ -16,19 +20,18 @@
 #include "simulatorapi/simapi/simapi/simdata.h"
 #include "slog/slog.h"
 
+#include <nappgui.h>
+#include <gui/guiall.h>
+#include "./mgui/nappgui_src/build/demo/guihello/resgen/res_guihello.h"
+
+
 #define PROGRAM_NAME "monocoque"
-MonocoqueSettings* ms;
+MonocoqueSettings ms;
+Parameters* p;
 
+char **m_argv;
+int m_argc;
 int appstate = 0;
-
-void display_banner()
-{
-    printf("______  ______________   ___________________________________  ___________\n");
-    printf("___   |/  /_  __ \\__  | / /_  __ \\_  ____/_  __ \\_  __ \\_  / / /__  ____/\n");
-    printf("__  /|_/ /_  / / /_   |/ /_  / / /  /    _  / / /  / / /  / / /__  __/   \n");
-    printf("_  /  / / / /_/ /_  /|  / / /_/ // /___  / /_/ // /_/ // /_/ / _  /___   \n");
-    printf("/_/  /_/  \\____/ /_/ |_/  \\____/ \\____/  \\____/ \\___\\_\\\\____/  /_____/   \n");
-}
 
 void SetSettingsFromParameters(Parameters* p, MonocoqueSettings* ms, char* configdir_str, char* cachedir_str)
 {
@@ -76,18 +79,25 @@ void SetSettingsFromParameters(Parameters* p, MonocoqueSettings* ms, char* confi
     ms->force_udp_mode = false;
     ms->disable_audio = p->disable_audio;
 }
+/*---------------------------------------------------------------------------*/
 
-int monocoque_main(int argc, char** argv)
+int monocoque_initialize(int argc, char** argv)
 {
+
     char* home_dir_str = gethome();
     if(home_dir_str == NULL)
     {
         fprintf(stderr, "You need a home directory");
         return 0;
     }
-    Parameters* p = NULL;
+
+    p = NULL;
     p = malloc(sizeof(Parameters));
-    ms = malloc(sizeof(MonocoqueSettings));;
+    p->config_dirpath = NULL;
+    p->config_filepath = NULL;
+    p->log_filename_str = NULL;
+    p->log_fullfilename_str = NULL;
+    p->log_dirname_str = NULL;
 
     ConfigError ppe = getParameters(argc, argv, p);
     if (ppe == E_SUCCESS_AND_EXIT || ppe == E_SOMETHING_BAD)
@@ -102,7 +112,6 @@ int monocoque_main(int argc, char** argv)
         fprintf(stderr, "Function xdgInitHandle() failed, is $HOME unset?\n");
         //goto cleanup_final;
     }
-
     const char* config_home_str = xdgConfigHome(&xdg);
     const char* cache_home_str = xdgCacheHome(&xdg);
 
@@ -120,27 +129,24 @@ int monocoque_main(int argc, char** argv)
         cachedir_str = create_user_dir(home_dir_str, ".cache", PROGRAM_NAME);
     }
 
-    fprintf(stderr, "applying settings\n");
-    SetSettingsFromParameters(p, ms, configdir_str, cachedir_str);
+    SetSettingsFromParameters(p, &ms, configdir_str, cachedir_str);
 
     if(cachedir_str != NULL)
     {
-      free(cachedir_str);
+        free(cachedir_str);
     }
     if(configdir_str != NULL)
     {
-      free(configdir_str);
+        free(configdir_str);
     }
-    fprintf(stderr, "settings applied\n");
-
   
     slog_init("monocoque", SLOG_FLAGS_ALL, 1);
     slog_config_t slgCfg;
     slog_config_get(&slgCfg);
     slgCfg.eColorFormat = SLOG_COLORING_TAG;
     slgCfg.eDateControl = SLOG_TIME_ONLY;
-    strcpy(slgCfg.sFileName, ms->log_filename_str);
-    strcpy(slgCfg.sFilePath, ms->log_dirname_str);
+    strcpy(slgCfg.sFileName, ms.log_filename_str);
+    strcpy(slgCfg.sFilePath, ms.log_dirname_str);
     slgCfg.nTraceTid = 0;
     slgCfg.nToScreen = 1;
     slgCfg.nUseHeap = 0;
@@ -148,203 +154,343 @@ int monocoque_main(int argc, char** argv)
     slgCfg.nFlush = 0;
     slgCfg.nFlags = SLOG_FLAGS_ALL;
     slog_config_set(&slgCfg);
-    if (ms->verbosity_count < 2)
+    if (ms.verbosity_count < 2)
     {
         slog_disable(SLOG_TRACE);
     }
-    if (ms->verbosity_count < 1)
+    if (ms.verbosity_count < 1)
     {
         slog_disable(SLOG_DEBUG);
     }
     xdgWipeHandle(&xdg);
 
-    slogi("checking for diameters config");
-    char* diameters_file_str;
-    asprintf(&diameters_file_str, "%s/.config/monocoque/diameters.config", home_dir_str);
-    ms->tyre_diameter_config = strdup(diameters_file_str);
-    free(diameters_file_str);
-
-    ms->useconfig = 0;
-    ms->configcheck = 0;
 
 
-    slogi("Testing monocoque config file: %s", ms->config_str);
-    slogd("using diameters file %s %i", ms->tyre_diameter_config, ms->configcheck);
-    config_t cfg;
-    config_init(&cfg);
-    config_setting_t* config_devices = NULL;
-    if (!config_read_file(&cfg, ms->config_str))
+
+    if(ms.disable_audio == false)
     {
-        sloge("Issue with monocoque config file: %s:%d - %s", config_error_file(&cfg), config_error_line(&cfg), config_error_text(&cfg));
-        fprintf(stderr, "Issue with monocoque config file: %s:%d - %s\n", config_error_file(&cfg), config_error_line(&cfg), config_error_text(&cfg));
-        config_destroy(&cfg);
-        slog_destroy();
-        //goto cleanup_final;
+        setupsound();
     }
-    else
-    {
-        slogi("Opened and validated monocoque configuration file");
-    }
-    config_destroy(&cfg);
-
-
-
-        int error = 0;
-        error = MONOCOQUE_ERROR_NONE;
-        //setupsound();
-        bool pulseaudio = false;
-
-        //if (ms->program_action == A_PLAY)
-        //{
-            ms->useconfig = 1;
-            slogi("running monocoque in gameloop mode..");
-//#ifdef USE_PULSEAUDIO
-            //pa_threaded_mainloop_unlock(mainloop);
-            pulseaudio = true;
-//#endif
-
-            if(ms->disable_audio == false)
-            {
-                setupsound();
-            }
-            //error = looper(devices, numdevices, p);
-            error = monocoque_mainloop_start(ms);
-            //if (error == MONOCOQUE_ERROR_NONE)
-            //{
-            //    slogi("Game loop exited succesfully with error code: %i", error);
-            //}
-            //else
-            //{
-            //    sloge("Game loop exited with error code: %i", error);
-            //}
-            //if(ms->disable_audio == false)
-            //{
-            //    freesound();
-            //}
-        //}
-
-
-
 }
+/*---------------------------------------------------------------------------*/
 
-
-#include <nappgui.h>
-
-#define NUM_BRICKS 40
-
-Button *start_button;
-Button *stop_button;
-
-Label *game_status;
-Label *simd_status;
-
-typedef struct _app_t App;
-
-
-struct _app_t
+int monocoque_gameloop_start()
 {
-    bool_t is_running;
-    Cell *button;
-    Slider *slider;
-    View *view;
-    Window *window;
-};
-
-
+    start_loop(&ms);
+}
 
 /*---------------------------------------------------------------------------*/
 
 static void i_OnStart(App *app, Event *e)
 {
-
-    appstate = 0;
     unref(e);
     app->is_running = TRUE;
-    cell_enabled(app->button, FALSE);
-    uint32_t i;
-    int argc = (int)osapp_argc();
-    
-    char **argv = malloc(argc * sizeof(char *));
-    
-    for (i = 0; i < (uint32_t)argc; ++i)
+  
+    int rc = 0;
+    if(appstate == 0)
     {
-        char buffer[128];
-    
-        osapp_argv(i, buffer, sizeof(buffer));
-    
-        argv[i] = strdup(buffer);  /* allocate a copy */
+        rc = monocoque_gameloop_start();
     }
-    
-    int rc = monocoque_main(argc, argv);
-    fprintf(stderr, "monocoque mainloop started");
-    /* cleanup */
-    for (i = 0; i < (uint32_t)argc; ++i)
-        free(argv[i]);
-    
-    free(argv);
+    else
+    {
+        monocoque_mainloop_stop(&ms);
+    }
 }
+/*---------------------------------------------------------------------------*/
 
 static void i_OnStop(App *app, Event *e)
 {
-    monocoque_mainloop_stop(ms);
-}
-
-/*---------------------------------------------------------------------------*/
-
-static Panel *i_panel(App *app)
-{
-    Panel *panel = panel_create();
-    Layout *layout = layout_create(1, 4);
-    View *view = view_create();
-    Slider *slider = slider_create();
-    game_status = label_create();
-    start_button = button_push();
-    stop_button = button_push();
-    view_size(view, s2df(800, 600));
-    //view_OnDraw(view, listener(app, i_OnDraw, App));
-    //slider_OnMoved(slider, listener(app, i_OnSlider, App));
-    label_text(game_status, "Game:  None Detected      Simd: Not Detected");
-    button_text(start_button, "Start");
-    button_text(stop_button, "Stop");
-    button_OnClick(start_button, listener(app, i_OnStart, App));
-    button_OnClick(stop_button, listener(app, i_OnStop, App));
-    layout_view(layout, view, 0, 0);
-    //layout_slider(layout, slider, 0, 1);
-    layout_label(layout, game_status, 0, 3);
-    layout_button(layout, start_button, 0, 1);
-    layout_button(layout, stop_button, 0, 2);
-    layout_vexpand(layout, 0);
-    layout_vmargin(layout, 0, 10);
-    layout_vmargin(layout, 2, 10);
-    layout_margin(layout, 10);
-    panel_layout(panel, layout);
-    app->view = view;
-    app->slider = slider;
-    app->button = layout_cell(layout, 0, 3);
-    return panel;
+    monocoque_mainloop_stop(&ms);
 }
 
 /*---------------------------------------------------------------------------*/
 
 static void i_OnClose(App *app, Event *e)
 {
+    close_monocoque_config(ms.cfg);
+    monocoquesettingsfree(&ms);
+    
+    freeparams(p);
+    free(p);
+
+    for (int i = 0; i < (uint32_t)m_argc; ++i)
+        free(m_argv[i]);
+    free(m_argv);
+
     osapp_finish();
     unref(app);
     unref(e);
 }
+/*---------------------------------------------------------------------------*/
+
+static void i_OnAddClose(App *app, Event *e)
+{
+
+
+}
+
+static void i_OnDelete(App* app, Event *e)
+{
+    int devicenum = listbox_get_selected(app->listbox_devices);
+    if(devicenum == UINT32_MAX)
+    {
+        return;
+    }
+    delete_device_config(ms.cfg, ms.config_str, 0, devicenum);
+
+    listbox_clear(app->listbox_devices);
+    combo_clear(app->combo_configurations);
+    populate_device_list(app->listbox_devices, ms.cfg);
+    populate_combo_box(app->combo_configurations, ms.cfg);
+}
+/*---------------------------------------------------------------------------*/
+
+static void i_OnAddEdit(App* app, Event *e, enum device_action device_action)
+{
+    Panel *panel = NULL;
+
+    int devicenum = listbox_get_selected(app->listbox_devices);
+    if(devicenum == UINT32_MAX && device_action == DEVICE_ACTION_EDIT)
+    {
+        return;
+    }
+    if(device_action == DEVICE_ACTION_ADD)
+    {
+        devicenum = listbox_count(app->listbox_devices);
+    }
+    app->window2 = window_create(ekWINDOW_STDRES);
+    
+    panel = adddevice_window(app->window2, app, &ms, device_action, 0, devicenum);
+    
+    window_panel(app->window2, panel);
+    window_origin(app->window2, v2df(800, 200));
+    window_title(app->window2, "monocoque");
+    window_OnClose(app->window2, listener(app, i_OnAddClose, App));
+    
+    window_modal(app->window2, app->window);
+
+    window_destroy(&app->window2);
+
+    listbox_clear(app->listbox_devices);
+    combo_clear(app->combo_configurations);
+    populate_device_list(app->listbox_devices, ms.cfg);
+    populate_combo_box(app->combo_configurations, ms.cfg);
+}
+/*---------------------------------------------------------------------------*/
+
+static void i_OnAdd(App *app, Event *e)
+{
+    i_OnAddEdit(app, e, DEVICE_ACTION_ADD);
+}
+/*---------------------------------------------------------------------------*/
+
+static void i_OnEdit(App *app, Event *e)
+{
+    i_OnAddEdit(app, e, DEVICE_ACTION_EDIT);
+}
 
 /*---------------------------------------------------------------------------*/
 
+
+static void set_bottom_label_status(Label* label)
+{
+    char status_string[256];
+    snprintf(status_string, 256, "Game: %s      Game Status: None      Simd: %s", get_simexe_name(), get_simd_onoff());
+    label_text(label, status_string);
+}
+/*---------------------------------------------------------------------------*/
+
+static Panel *i_panel(App *app, MonocoqueSettings* ms)
+{
+    app->main_panel = panel_create();
+    app->subpanel = panel_scroll(FALSE, TRUE);
+
+    app->layout = layout_create(8,5);
+
+
+    app->listbox_devices = listbox_create();
+    listbox_size(app->listbox_devices, s2df(50, 50));
+    app->combo_configurations = combo_create();
+    app->label_configurations = label_create();
+    label_text(app->label_configurations, "Configuration: ");
+    app->label_game_status = label_create();
+
+    app->button_startstop = button_push();
+    app->button_add = button_push();
+    app->button_edit = button_push();
+    app->button_del = button_push();
+
+    app->layout1 = layout_create(8,1);
+    app->layout2 = layout_create(8,1);
+    app->layout3 = layout_create(1,1);
+    app->layout4 = layout_create(1,2);
+
+    layout_layout(app->layout, app->layout1, 0, 0);
+    layout_layout(app->layout, app->layout2, 0, 1);
+    layout_layout(app->layout, app->layout3, 0, 2);
+    layout_layout(app->layout, app->layout4, 0, 3);
+
+    appstate = 0;
+
+    set_bottom_label_status(app->label_game_status);
+    populate_device_list(app->listbox_devices, ms->cfg);
+    listbox_select(app->listbox_devices, 0, true);
+    populate_combo_box(app->combo_configurations, ms->cfg);
+
+
+    button_text(app->button_startstop, "Start");
+    button_text(app->button_add, "Add Device");
+    button_text(app->button_del, "Delete Device");
+    button_text(app->button_edit, "Edit Device");
+    button_OnClick(app->button_startstop, listener(app, i_OnStart, App));
+    button_OnClick(app->button_add, listener(app, i_OnAdd, App));
+    button_OnClick(app->button_edit, listener(app, i_OnEdit, App));
+    button_OnClick(app->button_del, listener(app, i_OnDelete, App));
+
+
+    layout_label(app->layout1, app->label_configurations, 0, 0);
+    layout_combo(app->layout1, app->combo_configurations, 1, 0);
+    
+    layout_button(app->layout2, app->button_add, 3, 0);
+    layout_button(app->layout2, app->button_edit, 4, 0);
+    layout_button(app->layout2, app->button_del, 5, 0);
+
+    layout_listbox(app->layout3, app->listbox_devices, 0, 0);
+
+    layout_button(app->layout4, app->button_startstop, 0, 0);
+    layout_label(app->layout4, app->label_game_status, 0, 1);
+
+    panel_layout(app->subpanel, app->layout3);
+    layout_panel(app->layout, app->subpanel, 0, 2);
+    
+    panel_layout(app->main_panel, app->layout);
+
+
+    app->devices_subpanel = layout_cell(app->layout, 0, 2);
+
+    // spacing
+
+    layout_valign(app->layout4, 0, 0, ekBOTTOM);
+    layout_valign(app->layout4, 0, 1, ekBOTTOM);
+
+    layout_halign(app->layout4, 0, 0, ekJUSTIFY);
+    layout_halign(app->layout4, 0, 1, ekJUSTIFY);
+
+    layout_hexpand(app->layout, 0);
+    layout_hexpand(app->layout4, 0);
+
+    layout_vexpand(app->layout, 0);
+    layout_vexpand(app->layout, 2);
+    layout_vexpand(app->layout4, 0);
+
+    button_vpadding(app->button_startstop, 0);
+    button_hpadding(app->button_startstop, 0);
+    layout_hexpand(app->layout1, 1);
+
+    return app->main_panel;
+}
+
+
 static App *i_create(void)
 {
+    uint32_t i;
+    int old_argc = (int)osapp_argc();
+    m_argc = old_argc + 1;
+    
+    m_argv = malloc((m_argc+1) * sizeof(char *));
+    m_argv[m_argc] = NULL;
+    for (i = 0; i < (uint32_t)m_argc; ++i)
+    {
+        char buffer[128];
+        m_argv[i] = NULL;
+        if (i == 1)
+        {
+            m_argv[i] = strdup("play");
+        }
+        else
+        {
+            uint32_t old_i = (i > 1) ? i - 1 : i;
+            osapp_argv(old_i, buffer, sizeof(buffer));
+            m_argv[i] = strdup(buffer);
+        }
+    }
+
+    // do some monocoque things here
+    ms.tyre_diameter_config = NULL;
+    ms.config_str = NULL;
+    ms.log_filename_str = NULL;
+    ms.log_dirname_str = NULL;
+
+    monocoque_initialize(m_argc, m_argv);
+    ms.cfg = open_monocoque_config(ms.config_str);
+
+    // find a better spot for this
+    dbind(SimData, uint32_t, velocity);
+    dbind(SimData, uint32_t, rpms);
+    dbind(SimData, uint32_t, gear);
+    dbind(SimData, uint32_t, maxrpm);
+    dbind(SimData, real64_t, tyreRPS[0]);
+    dbind(SimData, real64_t, tyreRPS[1]);
+    dbind(SimData, real64_t, tyreRPS[2]);
+    dbind(SimData, real64_t, tyreRPS[3]);
+    dbind(SimData, real64_t, tyrediameter[0]);
+    dbind(SimData, real64_t, tyrediameter[1]);
+    dbind(SimData, real64_t, tyrediameter[2]);
+    dbind(SimData, real64_t, tyrediameter[3]);
+
+    dbind(DeviceSettings, HapticEffectSettings, hapticsettings);
+    dbind(HapticEffectSettings, uint32_t, frequency);
+    dbind(HapticEffectSettings, uint32_t, frequencyMax);
+    dbind(HapticEffectSettings, uint32_t, amplitude);
+    dbind(HapticEffectSettings, uint32_t, amplitudeMax);
+    dbind(HapticEffectSettings, uint32_t, motorposition);
+    dbind(HapticEffectSettings, real64_t, threshold);
+    dbind(HapticEffectSettings, real64_t, duration);
+    dbind_enum(VibrationEffectType, EFFECT_ENGINERPM,  "Engine RPM");
+    dbind_enum(VibrationEffectType, EFFECT_GEARSHIFT,  "Gear Shift");
+    dbind_enum(VibrationEffectType, EFFECT_ABSBRAKES,  "ABS Brakes");
+    dbind_enum(VibrationEffectType, EFFECT_TYRESLIP,   "Tyre Slip");
+    dbind_enum(VibrationEffectType, EFFECT_TYRELOCK,   "Tyre Lock");
+    dbind_enum(VibrationEffectType, EFFECT_SUSPENSION, "Suspension");
+    dbind_enum(EffectModulationType, EFFECT_MODULATION_NONE, "None");
+    dbind_enum(EffectModulationType, EFFECT_MODULATION_FREQUENCY, "Frequency");
+    dbind_enum(EffectModulationType, EFFECT_MODULATION_AMPLIFY, "Amplify");
+    dbind_enum(MonocoqueTyreIdentifier, FRONTLEFT, "Front Left");
+    dbind_enum(MonocoqueTyreIdentifier, FRONTRIGHT, "Front Right");
+    dbind_enum(MonocoqueTyreIdentifier, REARLEFT, "Rear Left");
+    dbind_enum(MonocoqueTyreIdentifier, REARRIGHT, "Rear Right");
+    dbind_enum(MonocoqueTyreIdentifier, FRONTS, "Fronts");
+    dbind_enum(MonocoqueTyreIdentifier, REARS, "Rears");
+    dbind_enum(MonocoqueTyreIdentifier, ALLFOUR, "All Four");
+    dbind(HapticEffectSettings, uint32_t, modulation);
+    dbind(HapticEffectSettings, uint32_t, tyre);
+    dbind(HapticEffectSettings, uint32_t, effect_type);
+    dbind(DeviceSettings, SerialDeviceSettings, serialdevsettings);
+    dbind(SerialDeviceSettings, uint32_t, baud);
+    dbind(SoundDeviceSettings, uint32_t, pan);
+    dbind(SoundDeviceSettings, uint32_t, channels);
+    dbind(SoundDeviceSettings, uint32_t, volume);
+    dbind(DeviceSettings, SerialDeviceSettings, serialdevsettings);
+    dbind(SerialDeviceSettings, uint32_t, startled);
+    dbind(SerialDeviceSettings, uint32_t, numleds);
+    dbind(SerialDeviceSettings, uint32_t, endled);
+    dbind_enum(DeviceType, SIMDEV_USB, "USB");
+    dbind_enum(DeviceType, SIMDEV_SOUND, "Sound");
+    dbind_enum(DeviceType, SIMDEV_SERIAL, "Serial");
+    dbind(DeviceSettings, DeviceType, dev_type);
+    dbind(DeviceSettings, uint32_t, dev_subtype);
+    dbind(DeviceSettings, uint32_t, fps);
+    //gui stuff
     App *app = heap_new0(App);
-    Panel *panel = i_panel(app);
+
+    Panel *panel = i_panel(app, &ms);
     app->window = window_create(ekWINDOW_STDRES);
     window_panel(app->window, panel);
-    window_origin(app->window, v2df(200, 200));
+    window_origin(app->window, v2df(800, 200));
     window_title(app->window, "monocoque");
     window_OnClose(app->window, listener(app, i_OnClose, App));
     window_show(app->window);
+
     return app;
 }
 
@@ -352,6 +498,10 @@ static App *i_create(void)
 
 static void i_destroy(App **app)
 {
+    //monocoquesettingsfree(&ms);
+    //freeparams(p);
+    //free(p);
+    osapp_finish();
     window_destroy(&(*app)->window);
     heap_delete(app, App);
 }
@@ -359,26 +509,30 @@ static void i_destroy(App **app)
 
 /*---------------------------------------------------------------------------*/
 
+
+
 static void i_update(App *app, const real64_t prtime, const real64_t ctime)
 {
     if (app->is_running == TRUE)
     {
         if(appstate == 2)
         {
-            button_text(start_button, "Playing... Press to Stop");
+            button_text(app->button_startstop, "Playing... Press to Stop");
+            cell_enabled(app->devices_subpanel, false);
         }
         if(appstate == 1)
         {
-            button_text(start_button, "Searching for data... Press to Stop");
+            button_text(app->button_startstop, "Searching for data... Press to Stop");
+            cell_enabled(app->devices_subpanel, false);
         }
-        if(appstate == 0)
+        if(appstate <= 0)
         {
-            button_text(start_button, "Start");
+            button_text(app->button_startstop, "Start");
+            cell_enabled(app->devices_subpanel, true);
         }
-        label_text(game_status, "Game:  (Searching) None Detected      Simd: Not Detected");
+        set_bottom_label_status(app->label_game_status);
     }
 
-    view_update(app->view);
 }
 
 /*---------------------------------------------------------------------------*/

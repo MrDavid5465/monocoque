@@ -186,7 +186,7 @@ else() # GCC/Clang warning option
 
     if(analyze)
         message("-- Analyzer is on")
-        target_compile_options(monocoque PRIVATE -fanalyzer -Wno-analyzer-possible-null-argument -Wno-analyzer-possible-null-dereference)
+        target_compile_options(monocoque PRIVATE -fanalyzer -Wno-analyzer-possible-null-argument -Wno-analyzer-possible-null-dereference -fsanitize=address -g -fno-omit-frame-pointer)
     endif()
 
     enable_cxx_compiler_flag_if_supported("-Wall")

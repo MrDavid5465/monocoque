@@ -61,7 +61,6 @@ int arduino_custom_updater(SimDevice* this, SimData* simdata)
 int arduino_customled_updater(SimDevice* this, SimData* simdata)
 {
     SerialDevice* serialdevice = (void *) this->derived;
-
     arduino_customled_update(serialdevice, simdata);
 
     return 0;
@@ -233,7 +232,7 @@ int serial_wheel_free(SimDevice* this)
 
 int serialdev_init(SerialDevice* serialdevice, DeviceSettings* ds, SimInfo* siminfo)
 {
-    slogi("initializing serial device on port %s to %i...", ds->serialdevsettings.portdev, ds->serialdevsettings.baud);
+    slogi("initializing serial device on port %s to %i...", ds->dev, ds->serialdevsettings.baud);
     int error = 0;
 
 
@@ -246,17 +245,17 @@ int serialdev_init(SerialDevice* serialdevice, DeviceSettings* ds, SimInfo* simi
             // the wheel stuff assumed it was a usb
             //error = wheeldev_init(&serialdevice->u.wheeldevice, ds);
             // maybe this call a more generic serial wheel init first
-            error = moza_init(serialdevice, ds->serialdevsettings.portdev);
+            error = moza_init(serialdevice, ds->dev);
             break;
         case SERIALDEV__MOZA_NEW:
-            error = moza_new_init(serialdevice, ds->serialdevsettings.portdev);
+            error = moza_new_init(serialdevice, ds->dev);
             break;
         case SERIALDEV__MOZA_KS_PRO_WHEEL:
-            error = moza_ks_pro_wheel_init(serialdevice, ds->serialdevsettings.portdev);
+            error = moza_ks_pro_wheel_init(serialdevice, ds->dev);
             break;
         case ARDUINODEV__SIMLED__CUSTOM:
             serialdevice->m.device_specific_config_file = strdup(ds->specific_config_file);
-            error = arduino_custom_init(serialdevice, ds->serialdevsettings.portdev, serialdevice->m.device_specific_config_file, true);
+            error = arduino_custom_init(serialdevice, ds->dev, serialdevice->m.device_specific_config_file, true);
             if(error < 0)
             {
                 free(serialdevice->m.device_specific_config_file);
@@ -264,17 +263,17 @@ int serialdev_init(SerialDevice* serialdevice, DeviceSettings* ds, SimInfo* simi
             break;
         case ARDUINODEV__CUSTOM:
             serialdevice->m.device_specific_config_file = strdup(ds->specific_config_file);
-            error = arduino_custom_init(serialdevice, ds->serialdevsettings.portdev, serialdevice->m.device_specific_config_file, false);
+            error = arduino_custom_init(serialdevice, ds->dev, serialdevice->m.device_specific_config_file, false);
             if(error < 0)
             {
                 free(serialdevice->m.device_specific_config_file);
             }
             break;
         case ARDUINODEV__SIMLED:
-            error = arduino_custom_init(serialdevice, ds->serialdevsettings.portdev, NULL, false);
+            error = arduino_custom_init(serialdevice, ds->dev, NULL, false);
             break;
         default:
-            error = arduino_init(serialdevice, ds->serialdevsettings.portdev);
+            error = arduino_init(serialdevice, ds->dev);
             break;
     }
 
