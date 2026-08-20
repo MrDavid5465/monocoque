@@ -87,22 +87,25 @@ endif()
 
 message("Using pulseaudio backend...")
 add_compile_definitions(USE_PULSEAUDIO=true)
-target_link_libraries(monocoque m hidapi-hidraw pulse serialport xml2 argtable2 config gameloop helper devices slog simulatorapi uv xdg-basedir Lua::Lua proc2)
-target_include_directories(monocoque PUBLIC config ${LIBXML_INCLUDE_DIR} ${LUA_INCLUDE_DIR})
-target_link_libraries(monocoque-cli m hidapi-hidraw pulse serialport xml2 argtable2 config gameloop helper devices slog simulatorapi uv xdg-basedir Lua::Lua proc2)
-target_include_directories(monocoque-cli PUBLIC config ${LIBXML_INCLUDE_DIR} ${LUA_INCLUDE_DIR})
-if(BUILD_GUI)
-    target_link_libraries(monocoque-gui m hidapi-hidraw pulse serialport xml2 argtable2 config mgui gameloop helper devices slog simulatorapi uv xdg-basedir Lua::Lua proc2)
-    target_include_directories(monocoque-gui PUBLIC config ${LIBXML_INCLUDE_DIR} ${LUA_INCLUDE_DIR})
-add_subdirectory(src/monocoque/mgui)
-endif()
-
 
 add_subdirectory(src/monocoque/gameloop)
 add_subdirectory(src/monocoque/simulatorapi)
 add_subdirectory(src/monocoque/helper)
 add_subdirectory(src/monocoque/devices)
 add_subdirectory(src/monocoque/slog)
+
+target_link_libraries(monocoque m hidapi-hidraw pulse serialport xml2 argtable2 config gameloop helper devices slog simulatorapi uv xdg-basedir Lua::Lua proc2)
+target_include_directories(monocoque PUBLIC config ${LIBXML_INCLUDE_DIR} ${LUA_INCLUDE_DIR})
+target_link_libraries(monocoque-cli m hidapi-hidraw pulse serialport xml2 argtable2 config gameloop helper devices slog simulatorapi uv xdg-basedir Lua::Lua proc2)
+target_include_directories(monocoque-cli PUBLIC config ${LIBXML_INCLUDE_DIR} ${LUA_INCLUDE_DIR})
+if(BUILD_GUI)
+    add_subdirectory(src/monocoque/mgui)
+    target_link_libraries(monocoque-gui m hidapi-hidraw pulse serialport xml2 argtable2 config mgui gameloop helper devices slog simulatorapi uv xdg-basedir Lua::Lua proc2)
+    target_include_directories(monocoque-gui PUBLIC config ${LIBXML_INCLUDE_DIR} ${LUA_INCLUDE_DIR})
+endif()
+
+
+
 
 #add_executable(listusb tests/testlibusb.c)
 #target_include_directories(listusb PUBLIC)
