@@ -1,0 +1,19 @@
+Files:
+ *
+Copyright: 2022 Paul Jones
+License: GPL-3+
+
+Files:
+ src/monocoque/slog/slog.?
+Copyright: 2015-2025  Sandro Kalatozishvili (s.kalatoz@gmail.com)
+License: MIT
+
+Files:
+ src/monocoque/mgui/nappgui_src/*
+Copyright: 2021 Francisco García Collado
+License: MIT
+
+Files:
+ src/monocoque/simulatorapi/simapi/*
+Copyright: 2022 Paul Jones
+License: LGPL
