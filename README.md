@@ -81,6 +81,9 @@ for installation instructions***
 - xdg-basedir
 - lua
 - libproc2
+- libcurl4
+- libgtk3
+- libglu1-mesa
 - [simapi](https://github.com/spacefreak18/simapi)
 - [slog](https://github.com/kala13x/slog) (static)
 - [nappgui](https://github.com/frang75/nappgui_src) (static) (for GUI)
