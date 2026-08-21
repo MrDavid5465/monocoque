@@ -48,6 +48,7 @@ jobs:
         mkdir -p PKG_SOURCE/DEBIAN
         mkdir -p PKG_SOURCE/usr/bin/
         cp ./tools/distro/debian/dpkg/${{ matrix.os }}/control ./PKG_SOURCE/DEBIAN/control
+        cp ./tools/distro/debian/dpkg/copyright ./PKG_SOURCE/DEBIAN/copyright
         cp ./build/monocoque ./PKG_SOURCE/usr/bin/monocoque
         dpkg-deb --build PKG_SOURCE monocoque-${{ matrix.os }}.deb
 
