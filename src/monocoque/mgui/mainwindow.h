@@ -1,5 +1,7 @@
 #include "../helper/confighelper.h"
 
+#pragma once
+
 enum device_action { 
     DEVICE_ACTION_ADD, DEVICE_ACTION_EDIT, DEVICE_ACTION_DELETE
 };
