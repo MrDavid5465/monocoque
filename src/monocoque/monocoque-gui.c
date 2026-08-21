@@ -22,7 +22,6 @@
 
 #include <nappgui.h>
 #include <gui/guiall.h>
-#include "./mgui/nappgui_src/build/demo/guihello/resgen/res_guihello.h"
 
 
 #define PROGRAM_NAME "monocoque"
