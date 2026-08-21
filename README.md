@@ -69,7 +69,7 @@ for installation instructions***
 
 ## Building
 
-### Dependencies
+### Dependencies (static dependencies are linked as to show their respective copyright and licenses)
 - libserialport - arduino serial devices
 - hidapi - usb hid devices (hidraw)
 - portaudio - sound devices (haptic bass shakers)
@@ -81,9 +81,12 @@ for installation instructions***
 - xdg-basedir
 - lua
 - libproc2
-- [slog](https://github.com/kala13x/slog) (static)
-- [simshmbridge](https://github.com/spacefreak18/simshmbridge) - for sims that need shared memory mapping like AC and Project Cars related.
 - [simapi](https://github.com/spacefreak18/simapi)
+- [slog](https://github.com/kala13x/slog) (static)
+- [nappgui](https://github.com/frang75/nappgui_src) (static) (for GUI)
+(sorta optional)
+- [simshmbridge](https://github.com/spacefreak18/simshmbridge) - for sims that need shared memory mapping like AC and Project Cars related.
+
 ```
 pacman -Syu git cmake pulse-native-provider libxdg-basedir libserialport libconfig libuv argtable hidapi lua libproc2
 ```
