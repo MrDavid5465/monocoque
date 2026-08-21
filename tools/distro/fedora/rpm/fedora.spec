@@ -10,7 +10,7 @@ URL: https://spacefreak18.github.io/simapi
 Distribution: Fedora Linux
 Vendor: spacefreak18
 Packager: Paul Jones <paul@spacefreak18.xyz>
-Requires: pulseaudio-libs argtable libconfig hidapi libserialport libuv libxdg-basedir lua-libs libxml2 procps-ng gtk3
+Requires: pulseaudio-libs argtable libconfig hidapi libserialport libuv libxdg-basedir lua-libs libxml2 procps-ng gtk3 libcurl mesa-libGL
 
 %description
 A device manager for Racing sims
