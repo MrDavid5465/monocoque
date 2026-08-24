@@ -135,9 +135,33 @@ log_info "Installing packages inside container (this may take a few minutes)..."
 distrobox enter --root "$CONTAINER" -- bash -c '
     set -euo pipefail
 
+    # Enable the multilib repo for 32-bit runtime support — Proton bridge
+    # apps (e.g. acbridge.exe) are 32-bit wine processes and fail with a
+    # bare "No such file or directory" (not a permissions/PATH error) when
+    # /lib/ld-linux.so.2, the 32-bit dynamic linker, is missing. A fresh
+    # Arch container image does not ship multilib enabled by default, and
+    # (confirmed on a real install) not even the commented-out [multilib]
+    # stanza is present to uncomment — it has to be appended outright.
+    # Idempotent so re-running this script is still safe.
+    if ! grep -q "^\[multilib\]" /etc/pacman.conf; then
+        echo "Enabling multilib repository (needed for 32-bit wine/Proton bridge support)..."
+        cat >> /etc/pacman.conf << "PACMANCONF_EOF"
+
+[multilib]
+Include = /etc/pacman.d/mirrorlist
+PACMANCONF_EOF
+    fi
+
     # Install build dependencies
     echo "Installing build dependencies..."
-    sudo pacman -Syu --needed --noconfirm base-devel git mingw-w64-gcc
+    # wine + lib32-glibc pull in the well-tested 32-bit dependency chain
+    # the Proton-bundled wine build each game uses needs to actually
+    # execute (this Arch wine package is not run directly — each game
+    # launches its own Proton version bridge via BridgeScripts.txt-style
+    # commands — installing the package is just the simplest reliable way
+    # to get every lib32-* dependency it needs without hand-picking each
+    # one).
+    sudo pacman -Syu --needed --noconfirm base-devel git mingw-w64-gcc wine lib32-glibc
 
     # Install yay (AUR helper) if not present
     if ! command -v yay &>/dev/null; then
@@ -252,5 +276,5 @@ echo "         start-simd & start-monocoque & $INSTALL_DIR/simshmbridge/assets/a
 echo ""
 echo "  For tools that automate steps 1 and 3 (Moza auto-detection, Steam launch"
 echo "  option configuration, unified game launcher), visit:"
-echo "    https://github.com/cescofry/simracing-utilities"
+echo "    https://github.com/cescofry/simracing-utilties"
 echo ""
