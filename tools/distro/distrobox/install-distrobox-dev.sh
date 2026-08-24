@@ -276,5 +276,5 @@ echo "         start-simd-dev & start-monocoque-dev & $INSTALL_DIR/simshmbridge/
 echo ""
 echo "  For tools that automate steps 1 and 3 (Moza auto-detection, Steam launch"
 echo "  option configuration, unified game launcher), visit:"
-echo "    https://github.com/cescofry/simracing-utilities"
+echo "    https://github.com/cescofry/simracing-utilties"
 echo ""
