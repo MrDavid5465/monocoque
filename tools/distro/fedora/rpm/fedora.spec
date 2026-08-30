@@ -10,7 +10,7 @@ URL: https://spacefreak18.github.io/simapi
 Distribution: Fedora Linux
 Vendor: spacefreak18
 Packager: Paul Jones <paul@spacefreak18.xyz>
-Requires: pulseaudio-libs argtable libconfig hidapi libserialport libuv libxdg-basedir lua-libs libxml2 procps-ng
+Requires: pulseaudio-libs argtable libconfig hidapi libserialport libuv libxdg-basedir lua-libs libxml2 procps-ng gtk3 libcurl mesa-libGL
 
 %description
 A device manager for Racing sims
@@ -27,13 +27,15 @@ cp -r $RPM_SOURCE_DIR/monocoque $RPM_BUILD_DIR/
 
 %build
 cd $RPM_BUILD_DIR/monocoque
-cmake -B build
+cmake -B build -DBUILD_GUI=on
 cd build
 make
 
 %install
 mkdir -p $RPM_BUILD_ROOT/usr/bin
 cp $RPM_BUILD_DIR/monocoque/build/monocoque $RPM_BUILD_ROOT/usr/bin/monocoque
+cp $RPM_BUILD_DIR/monocoque/build/gmonocoque $RPM_BUILD_ROOT/usr/bin/gmonocoque
 
 %files
 /usr/bin/monocoque
+/usr/bin/gmonocoque

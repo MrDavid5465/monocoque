@@ -13,8 +13,6 @@ set(devices_source_files
   tachdevice.c
   wheeldevice.h
   wheeldevice.c
-  usbhapticdevice.h
-  usbhapticdevice.c
   hapticeffect.h
   hapticeffect.c
   sound.h
@@ -25,6 +23,8 @@ set(devices_source_files
   usb/cslelitev3.c
   usb/simagicp1000.h
   usb/simagicp1000.c
+  usb/simnetpedals.h
+  usb/simnetpedals.c
   usb/wheels/logitechg29.h
   usb/wheels/logitechg29.c
   usb/wheels/cammusc5.h
@@ -49,3 +49,5 @@ set(devices_source_files
 include_directories("." "usb" "sound" "serial")
 
 add_library(devices STATIC ${devices_source_files})
+
+set_property(TARGET devices PROPERTY POSITION_INDEPENDENT_CODE ON)

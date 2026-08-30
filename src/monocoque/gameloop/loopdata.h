@@ -40,5 +40,13 @@ typedef struct loop_data
 } loop_data;
 
 
+typedef struct test_loop_args
+{
+    MonocoqueSettings* ms;
+    DeviceSettings* ds;
+    SimData* simdata;
+    int devicenum;
+    int confignum;
+} test_loop_args;
 
 #endif

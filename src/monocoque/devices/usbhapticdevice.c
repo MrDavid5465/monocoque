@@ -7,6 +7,7 @@
 #include "hapticeffect.h"
 #include "usb/cslelitev3.h"
 #include "usb/simagicp1000.h"
+#include "usb/simnetpedals.h"
 
 #include "../../helper/confighelper.h"
 #include "../../simulatorapi/simapi/simapi/simdata.h"
@@ -16,7 +17,7 @@
 int usbhapticdev_update(USBGenericHapticDevice* usbhapticdevice, SimData* simdata, int tyre, int useconfig, int* configcheck, char* configfile)
 {
 
-    double play = slipeffect(simdata, usbhapticdevice->effecttype, tyre, usbhapticdevice->threshold, useconfig, configcheck, configfile);
+    double play = slipeffect(simdata, this->hapticeffect.effecttype, tyre, this->hapticeffect.threshold, useconfig, configcheck, configfile);
 
     if (play != usbhapticdevice->state)
     {
@@ -27,10 +28,13 @@ int usbhapticdev_update(USBGenericHapticDevice* usbhapticdevice, SimData* simdat
             switch ( usbhapticdevice->type )
             {
                 case USBHAPTIC_CSLELITEV3PEDALS:
-                    cslelitev3_update(usbhapticdevice, usbhapticdevice->effecttype, rplay);
+                    cslelitev3_update(usbhapticdevice, this->hapticeffect.effecttype, rplay);
                     break;
                 case USBHAPTIC_SIMAGICP1000PEDALS:
-                    simagicp1000_update(usbhapticdevice, usbhapticdevice->effecttype, rplay);
+                    simagicp1000_update(usbhapticdevice, this->hapticeffect.effecttype, rplay);
+                    break;
+                case USBHAPTIC_SIMNETPEDALS:
+                    simnetpedals_update(usbhapticdevice, this->hapticeffect.effecttype, rplay);
                     break;
             }
         }
@@ -39,10 +43,13 @@ int usbhapticdev_update(USBGenericHapticDevice* usbhapticdevice, SimData* simdat
             switch ( usbhapticdevice->type )
             {
                 case USBHAPTIC_CSLELITEV3PEDALS:
-                    cslelitev3_update(usbhapticdevice, usbhapticdevice->effecttype, rplay);
+                    cslelitev3_update(usbhapticdevice, this->hapticeffect.effecttype, rplay);
                     break;
                 case USBHAPTIC_SIMAGICP1000PEDALS:
-                    simagicp1000_update(usbhapticdevice, usbhapticdevice->effecttype, rplay);
+                    simagicp1000_update(usbhapticdevice, this->hapticeffect.effecttype, rplay);
+                    break;
+                case USBHAPTIC_SIMNETPEDALS:
+                    simnetpedals_update(usbhapticdevice, this->hapticeffect.effecttype, rplay);
                     break;
             }
         }
@@ -62,6 +69,9 @@ int usbhapticdev_free(USBGenericHapticDevice* usbhapticdevice)
         case USBHAPTIC_SIMAGICP1000PEDALS:
             simagicp1000_free(usbhapticdevice);
             break;
+        case USBHAPTIC_SIMNETPEDALS:
+            simnetpedals_free(usbhapticdevice);
+            break;
     }
 
     return 0;
@@ -76,25 +86,7 @@ int usbhapticdev_init(USBGenericHapticDevice* usbhapticdevice, DeviceSettings* d
     }
 
     int error = 0;
-    usbhapticdevice->state = 0;
-    usbhapticdevice->value0 = ds->usbdevsettings.value0;
-    usbhapticdevice->value1 = ds->usbdevsettings.value1;
-    usbhapticdevice->state = usbhapticdevice->value0;
-    usbhapticdevice->effecttype = ds->effect_type;
-    usbhapticdevice->threshold = ds->threshold;
-
-    if(ds->effect_type == EFFECT_TYRESLIP)
-    {
-        usbhapticdevice->effecttype = EFFECT_TYRESLIP;
-    }
-    if(ds->effect_type == EFFECT_TYRELOCK)
-    {
-        usbhapticdevice->effecttype = EFFECT_TYRELOCK;
-    }
-    if(ds->effect_type == EFFECT_ABSBRAKES)
-    {
-        usbhapticdevice->effecttype = EFFECT_ABSBRAKES;
-    }
+    initializeHapticEffect(&this->m.hapticeffect, &ds->hapticsettings, ms);
 
     slogi("initializing standalone usb haptic device...");
     // detection of usb device model
@@ -106,6 +98,10 @@ int usbhapticdev_init(USBGenericHapticDevice* usbhapticdevice, DeviceSettings* d
         case (SIMDEVSUBTYPE_CSLELITEV3PEDALS):
             usbhapticdevice->type = USBHAPTIC_CSLELITEV3PEDALS;
             error = cslelitev3_init(usbhapticdevice);
+            break;
+        case (SIMDEVSUBTYPE_SIMNETPEDALS):
+            usbhapticdevice->type = USBHAPTIC_SIMNETPEDALS;
+            error = simnetpedals_init(usbhapticdevice);
             break;
         default:
             slogw("Possibly unknown device");

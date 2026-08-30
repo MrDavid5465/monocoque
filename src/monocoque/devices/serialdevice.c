@@ -61,7 +61,6 @@ int arduino_custom_updater(SimDevice* this, SimData* simdata)
 int arduino_customled_updater(SimDevice* this, SimData* simdata)
 {
     SerialDevice* serialdevice = (void *) this->derived;
-
     arduino_customled_update(serialdevice, simdata);
 
     return 0;
@@ -140,8 +139,12 @@ int arduino_simhaptic_update(SimDevice* this, SimData* simdata)
     int result = 1;
 
     slogt("arduino haptic device updating");
+    serialdevice->u.simhapticdata.motor1 = 0;
+    serialdevice->u.simhapticdata.motor2 = 0;
+    serialdevice->u.simhapticdata.motor3 = 0;
+    serialdevice->u.simhapticdata.motor4 = 0;
 
-    double play = slipeffect(simdata, this->hapticeffect.effecttype, this->hapticeffect.tyre, this->hapticeffect.threshold, this->hapticeffect.useconfig, this->hapticeffect.configcheck, this->hapticeffect.tyrediameterconfig);
+    double play = slipeffect(simdata, &this->hapticeffect, this->hapticeffect.useconfig, this->hapticeffect.configcheck, this->hapticeffect.tyrediameterconfig);
 
     double rplay = play;
     play = play * serialdevice->ampfactor;
@@ -149,25 +152,27 @@ int arduino_simhaptic_update(SimDevice* this, SimData* simdata)
     {
         play = 1.0;
     }
-    int effectspeed = ceil(255 * play);
+    uint8_t effectspeed = ceil(255 * play);
 
-    int motor = serialdevice->motorsposition;
+    uint8_t motor = this->hapticeffect.motorposition;
 
-    if (play != serialdevice->state)
+    if (play != serialdevice->hapticstate)
     {
+        // motor 1
         if (motor == 0 || motor == 4 || motor == 7 || motor == 8 || motor == 10 || motor == 11 || motor == 13 || motor == 14)
         {
             serialdevice->u.simhapticdata.effect1 = effectspeed;
             serialdevice->u.simhapticdata.motor1 = 1;
-            slogt("Updating arduino haptic device with effect type %i speed motor speed %i on motor %i from original effect %f with ampfactor %f", this->hapticeffect.effecttype, serialdevice->u.simhapticdata.effect3, serialdevice->motorsposition, rplay, serialdevice->ampfactor);
+            slogt("Updating arduino haptic device with effect type %i speed motor speed %i on motor %i from original effect %f with ampfactor %f", this->hapticeffect.effecttype, serialdevice->u.simhapticdata.effect1, 1, rplay, serialdevice->ampfactor);
         }
+        // motor 3
         if (motor == 2 || motor == 6 || motor == 8 || motor == 9 || motor == 10 || motor == 11 || motor == 12 || motor == 14)
         {
             serialdevice->u.simhapticdata.effect3 = effectspeed;
             serialdevice->u.simhapticdata.motor3 = 1;
-            slogt("Updating arduino haptic device with effect type %i speed motor speed %i on motor %i from original effect %f with ampfactor %f", this->hapticeffect.effecttype, serialdevice->u.simhapticdata.effect3, serialdevice->motorsposition, rplay, serialdevice->ampfactor);
+            slogt("Updating arduino haptic device with effect type %i speed motor speed %i on motor %i from original effect %f with ampfactor %f", this->hapticeffect.effecttype, serialdevice->u.simhapticdata.effect3, 3, rplay, serialdevice->ampfactor);
         }
-        serialdevice->state = play;
+        serialdevice->hapticstate = play;
     }
 
     size_t size = sizeof(SimHapticData);
@@ -191,7 +196,7 @@ int serialdev_free(SimDevice* this)
             serialdevice->u.simhapticdata.motor3 = 1;
             serialdevice->u.simhapticdata.effect4 = 0;
             serialdevice->u.simhapticdata.motor4 = 1;
-            serialdevice->state = 0;
+            serialdevice->hapticstate = 0;
 
             size_t size = sizeof(SimHapticData);
             monocoque_serial_write_block(serialdevice->id, &serialdevice->u.simhapticdata, size, 9000);
@@ -227,7 +232,7 @@ int serial_wheel_free(SimDevice* this)
 
 int serialdev_init(SerialDevice* serialdevice, DeviceSettings* ds, SimInfo* siminfo)
 {
-    slogi("initializing serial device on port %s to %i...", ds->serialdevsettings.portdev, ds->serialdevsettings.baud);
+    slogi("initializing serial device on port %s to %i...", ds->dev, ds->serialdevsettings.baud);
     int error = 0;
 
 
@@ -240,17 +245,17 @@ int serialdev_init(SerialDevice* serialdevice, DeviceSettings* ds, SimInfo* simi
             // the wheel stuff assumed it was a usb
             //error = wheeldev_init(&serialdevice->u.wheeldevice, ds);
             // maybe this call a more generic serial wheel init first
-            error = moza_init(serialdevice, ds->serialdevsettings.portdev);
+            error = moza_init(serialdevice, ds->dev);
             break;
         case SERIALDEV__MOZA_NEW:
-            error = moza_new_init(serialdevice, ds->serialdevsettings.portdev);
+            error = moza_new_init(serialdevice, ds->dev);
             break;
         case SERIALDEV__MOZA_KS_PRO_WHEEL:
-            error = moza_ks_pro_wheel_init(serialdevice, ds->serialdevsettings.portdev);
+            error = moza_ks_pro_wheel_init(serialdevice, ds->dev);
             break;
         case ARDUINODEV__SIMLED__CUSTOM:
             serialdevice->m.device_specific_config_file = strdup(ds->specific_config_file);
-            error = arduino_custom_init(serialdevice, ds->serialdevsettings.portdev, serialdevice->m.device_specific_config_file, true);
+            error = arduino_custom_init(serialdevice, ds->dev, serialdevice->m.device_specific_config_file, true);
             if(error < 0)
             {
                 free(serialdevice->m.device_specific_config_file);
@@ -258,17 +263,17 @@ int serialdev_init(SerialDevice* serialdevice, DeviceSettings* ds, SimInfo* simi
             break;
         case ARDUINODEV__CUSTOM:
             serialdevice->m.device_specific_config_file = strdup(ds->specific_config_file);
-            error = arduino_custom_init(serialdevice, ds->serialdevsettings.portdev, serialdevice->m.device_specific_config_file, false);
+            error = arduino_custom_init(serialdevice, ds->dev, serialdevice->m.device_specific_config_file, false);
             if(error < 0)
             {
                 free(serialdevice->m.device_specific_config_file);
             }
             break;
         case ARDUINODEV__SIMLED:
-            error = arduino_custom_init(serialdevice, ds->serialdevsettings.portdev, NULL, false);
+            error = arduino_custom_init(serialdevice, ds->dev, NULL, false);
             break;
         default:
-            error = arduino_init(serialdevice, ds->serialdevsettings.portdev);
+            error = arduino_init(serialdevice, ds->dev);
             break;
     }
 
@@ -350,7 +355,7 @@ SerialDevice* new_serial_device(DeviceSettings* ds, MonocoqueSettings* ms, SimIn
             this->u.simhapticdata.effect2 = 0;
             this->u.simhapticdata.effect3 = 0;
             this->u.simhapticdata.effect4 = 0;
-            this->state = 0;
+            this->hapticstate = 0;
             this->ampfactor = ds->serialdevsettings.ampfactor;
             this->fanpower = ds->serialdevsettings.fanpower;
             slogi("Initializing arduino device for haptic effects.");
@@ -382,10 +387,10 @@ SerialDevice* new_serial_device(DeviceSettings* ds, MonocoqueSettings* ms, SimIn
 
     if(this->devicetype == ARDUINODEV__HAPTIC && error == 0)
     {
-        this->m.hapticeffect.threshold = ds->threshold;
-        this->m.hapticeffect.effecttype = ds->effect_type;
-        slogt("Haptic effect: %i %i", this->m.hapticeffect.effecttype, ds->effect_type);
-        this->m.hapticeffect.tyre = ds->tyre;
+        this->m.hapticeffect.threshold = ds->hapticsettings.threshold;
+        this->m.hapticeffect.effecttype = ds->hapticsettings.effect_type;
+        slogt("Haptic effect: %i %i", this->m.hapticeffect.effecttype, ds->hapticsettings.effect_type);
+        this->m.hapticeffect.tyre = ds->hapticsettings.tyre;
         this->m.hapticeffect.useconfig = ms->useconfig;
         this->m.hapticeffect.configcheck = &ms->configcheck;
         this->m.hapticeffect.tyrediameterconfig = ms->tyre_diameter_config;
@@ -399,7 +404,7 @@ SerialDevice* new_serial_device(DeviceSettings* ds, MonocoqueSettings* ms, SimIn
 
     if (error != 0)
     {
-        slogw("Did not initialize usb device due to error code %i", error);
+        slogw("Did not initialize serial device due to error code %i", error);
         free(this);
         return NULL;
     }

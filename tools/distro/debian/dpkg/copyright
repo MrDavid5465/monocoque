@@ -1,0 +1,24 @@
+Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
+Upstream-Name: monocoque
+Upstream-Contact: Paul Jones <paul@spacefreak18.xyz>
+Source: https://github.com/spacefreak18/monocoque
+
+Files:
+ *
+Copyright: 2022 Paul Jones
+License: GPL-3+
+
+Files:
+ src/monocoque/slog/slog.?
+Copyright: 2015-2025  Sandro Kalatozishvili (s.kalatoz@gmail.com)
+License: MIT
+
+Files:
+ src/monocoque/mgui/nappgui_src/*
+Copyright: 2021 Francisco García Collado
+License: MIT
+
+Files:
+ src/monocoque/simulatorapi/simapi/*
+Copyright: 2022 Paul Jones
+License: LGPL

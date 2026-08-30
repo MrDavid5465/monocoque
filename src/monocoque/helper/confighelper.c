@@ -37,35 +37,35 @@ int strtoeffecttype(const char* effect, DeviceSettings* ds)
     if (strcicmp(effect, "Engine") == 0)
     {
         ds->is_valid = true;
-        ds->effect_type = EFFECT_ENGINERPM;
+        ds->hapticsettings.effect_type = EFFECT_ENGINERPM;
     }
     if (strcicmp(effect, "Gear") == 0)
     {
         ds->is_valid = true;
-        ds->effect_type = EFFECT_GEARSHIFT;
+        ds->hapticsettings.effect_type = EFFECT_GEARSHIFT;
     }
     if (strcicmp(effect, "Suspension") == 0)
     {
         ds->is_valid = true;
-        ds->effect_type = EFFECT_SUSPENSION;
+        ds->hapticsettings.effect_type = EFFECT_SUSPENSION;
     }
     if (strcicmp(effect, "ABS") == 0)
     {
         ds->is_valid = true;
         slogt("found abas effect set");
-        ds->effect_type = EFFECT_ABSBRAKES;
+        ds->hapticsettings.effect_type = EFFECT_ABSBRAKES;
     }
     if ((strcicmp(effect, "SLIP") == 0) || (strcicmp(effect, "TYRESLIP") == 0) || (strcicmp(effect, "TIRESLIP") == 0))
     {
         ds->is_valid = true;
         slogt("found tyreslip effect set");
-        ds->effect_type = EFFECT_TYRESLIP;
+        ds->hapticsettings.effect_type = EFFECT_TYRESLIP;
     }
     if ((strcicmp(effect, "LOCK") == 0) || (strcicmp(effect, "TYRELOCK") == 0) || (strcicmp(effect, "TIRELOCK") == 0))
     {
         ds->is_valid = true;
         slogt("found tyreslock effect set");
-        ds->effect_type = EFFECT_TYRELOCK;
+        ds->hapticsettings.effect_type = EFFECT_TYRELOCK;
     }
 
     if (ds->is_valid == false)
@@ -128,6 +128,11 @@ int strtodevsubsubtype(const char* device_subsubtype, DeviceSettings* ds)
         ds->dev_subsubtype = SIMDEVSUBTYPE_CSLELITEV3PEDALS;
         devfound = true;
     }
+    if (strcicmp(device_subsubtype, "SIMNETPEDALS") == 0)
+    {
+        ds->dev_subsubtype = SIMDEVSUBTYPE_SIMNETPEDALS;
+        devfound = true;
+    }
     if (strcicmp(device_subsubtype, "SIMAGICP1000PEDALS") == 0)
     {
         ds->dev_subsubtype = SIMDEVSUBTYPE_SIMAGICP1000PEDALS;
@@ -136,6 +141,11 @@ int strtodevsubsubtype(const char* device_subsubtype, DeviceSettings* ds)
     if (strcicmp(device_subsubtype, "SIMAGICGTNEO") == 0)
     {
         ds->dev_subsubtype = SIMDEVSUBTYPE_SIMAGICGTNEO;
+        devfound = true;
+    }
+    if (strcicmp(device_subsubtype, "REVBURNER") == 0)
+    {
+        ds->dev_subsubtype = SIMDEVSUBTYPE_REVBURNERTACHOMETER;
         devfound = true;
     }
 
@@ -586,31 +596,31 @@ int gettyre(config_setting_t* device_settings, DeviceSettings* ds) {
     const char* temp;
     int found = config_setting_lookup_string(device_settings, "tyre", &temp);
 
-    ds->tyre = ALLFOUR;
+    ds->hapticsettings.tyre = ALLFOUR;
 
     if (strcicmp(temp, "FRONTS") == 0)
     {
-        ds->tyre = FRONTS;
+        ds->hapticsettings.tyre = FRONTS;
     }
     if (strcicmp(temp, "REARS") == 0)
     {
-        ds->tyre = REARS;
+        ds->hapticsettings.tyre = REARS;
     }
     if (strcicmp(temp, "FRONTLEFT") == 0)
     {
-        ds->tyre = FRONTLEFT;
+        ds->hapticsettings.tyre = FRONTLEFT;
     }
     if (strcicmp(temp, "FRONTRIGHT") == 0)
     {
-        ds->tyre = FRONTRIGHT;
+        ds->hapticsettings.tyre = FRONTRIGHT;
     }
     if (strcicmp(temp, "REARLEFT") == 0)
     {
-        ds->tyre = REARLEFT;
+        ds->hapticsettings.tyre = REARLEFT;
     }
     if (strcicmp(temp, "REARRIGHT") == 0)
     {
-        ds->tyre = REARRIGHT;
+        ds->hapticsettings.tyre = REARRIGHT;
     }
 
 }
@@ -674,6 +684,25 @@ int configcheck(const char* config_file_str, int confignum, int* devices)
     return 0;
     //return cfg;
 }
+static int config_get_device(const config_setting_t *entry, DeviceSettings *ds)
+{
+    const char *value = NULL;
+
+    if (config_setting_lookup_string(entry, "devid", &value))
+    {
+        ds->dev = strdup(value);
+        return ds->dev != NULL;
+    }
+
+    if (config_setting_lookup_string(entry, "devpath", &value))
+    {
+        ds->dev = strdup(value);
+        return ds->dev != NULL;
+    }
+
+    ds->dev = NULL;
+    return 0;
+}
 
 int devsetup(const char* device_type, const char* device_subtype, const char* config_file, MonocoqueSettings* ms, DeviceSettings* ds, config_setting_t* device_settings)
 {
@@ -700,6 +729,7 @@ int devsetup(const char* device_type, const char* device_subtype, const char* co
 
     ds->fps = 60;
     config_setting_lookup_int(device_settings, "fps", &ds->fps);
+    config_get_device(device_settings, ds);
 
     if (ds->dev_subtype == SIMDEVTYPE_TACHOMETER)
     {
@@ -720,115 +750,7 @@ int devsetup(const char* device_type, const char* device_subtype, const char* co
         }
     }
 
-    if (ds->dev_subtype == SIMDEVTYPE_USBHAPTIC || ds->dev_subtype == SIMDEVTYPE_USBWHEEL || ds->dev_subtype == SIMDEVTYPE_SERIALWHEEL)
-    {
-        // logic for different devices
-        int b = 0;
-
-        const char* temp;
-        int found = config_setting_lookup_string(device_settings, "subtype", &temp);
-        if(temp != NULL && found > 0)
-        {
-            b = strtodevsubsubtype(temp, ds);
-        }
-    }
-
-    if (ds->dev_subtype == SIMDEVTYPE_USBHAPTIC || ds->dev_type == SIMDEV_SOUND || ds->dev_subtype == SIMDEVTYPE_SERIALHAPTIC)
-    {
-        slogt("analysing haptic effect settings");
-        const char* effect;
-        config_setting_lookup_string(device_settings, "effect", &effect);
-        strtoeffecttype(effect, ds);
-        if (ds->effect_type == EFFECT_TYRESLIP || ds->effect_type == EFFECT_TYRELOCK || ds->effect_type == EFFECT_ABSBRAKES || ds->effect_type == EFFECT_SUSPENSION )
-        {
-            gettyre(device_settings, ds);
-            ds->threshold = 0;
-            int found = config_setting_lookup_float(device_settings, "threshold", &ds->threshold);
-        }
-
-        if (ds->dev_type == SIMDEV_SOUND)
-        {
-            slogi("reading configured sound device settings");
-            ds->sounddevsettings.frequency = 0;
-            ds->sounddevsettings.frequencyMax = 0;
-            ds->sounddevsettings.amplitude = 50;
-            ds->sounddevsettings.amplitudeMax = 50;
-            ds->sounddevsettings.volume = 0;
-            ds->sounddevsettings.pan = 0;
-            ds->sounddevsettings.channels = 1;
-            ds->sounddevsettings.duration = 2.0;
-            ds->sounddevsettings.noise = 0;
-            if (ds->effect_type == EFFECT_GEARSHIFT)
-            {
-                ds->sounddevsettings.duration = .125;
-            }
-            if (device_settings != NULL)
-            {
-
-                config_setting_lookup_int(device_settings, "volume", &ds->sounddevsettings.volume);
-                config_setting_lookup_int(device_settings, "frequency", &ds->sounddevsettings.frequency);
-                config_setting_lookup_int(device_settings, "frequencyMax", &ds->sounddevsettings.frequencyMax);
-                config_setting_lookup_int(device_settings, "amplitude", &ds->sounddevsettings.amplitude);
-                config_setting_lookup_int(device_settings, "amplitudeMax", &ds->sounddevsettings.amplitudeMax);
-                config_setting_lookup_int(device_settings, "pan", &ds->sounddevsettings.pan);
-                config_setting_lookup_int(device_settings, "channels", &ds->sounddevsettings.channels);
-                config_setting_lookup_float(device_settings, "duration", &ds->sounddevsettings.duration);
-                config_setting_lookup_int(device_settings, "noise", &ds->sounddevsettings.noise);
-
-                const char* temp = NULL;
-                int found = 0;
-                found = config_setting_lookup_string(device_settings, "devid", &temp);
-                if (found == CONFIG_FALSE)
-                {
-                    ds->sounddevsettings.dev = NULL;
-                }
-                else
-                {
-                    if(temp != NULL)
-                    {
-                        ds->sounddevsettings.dev = strdup(temp);
-                    }
-                }
-
-
-                found = config_setting_lookup_string(device_settings, "modulation", &temp);
-                ds->sounddevsettings.modulation = SOUND_EFFECT_MODULATION_NONE;
-                if (found == 0)
-                {
-                    ds->sounddevsettings.modulation = SOUND_EFFECT_MODULATION_NONE;
-                    slogd("Effect modulation not found, set to none");
-                }
-                else
-                {
-                    if(strcicmp(temp, "FREQUENCY") == 0)
-                    {
-                        ds->sounddevsettings.modulation = SOUND_EFFECT_MODULATION_FREQUENCY;
-                        if(ds->sounddevsettings.frequencyMax == 0 || ds->sounddevsettings.frequencyMax < ds->sounddevsettings.frequency)
-                        {
-                            ds->sounddevsettings.modulation = SOUND_EFFECT_MODULATION_NONE;
-                            slogw("Falling back to no frequency modulation since frequencyMax is either not set or set below target frequency");
-                        }
-                        else
-                        {
-                            slogi("Effect modulation found, set to FREQUENCY");
-                        }
-                    }
-                    else if(strcicmp(temp, "AMPLIFY") == 0)
-                    {
-                        ds->sounddevsettings.modulation = SOUND_EFFECT_MODULATION_AMPLIFY;
-                        slogi("Effect modulation found, set to AMPLIFY");
-                    }
-                    else
-                    {
-                        slogw("%s is not a valid modulation type, falling back to no effect modulation");
-                        ds->sounddevsettings.modulation = SOUND_EFFECT_MODULATION_NONE;
-                    }
-                }
-            }
-        }
-    }
-
-    if (ds->dev_type == SIMDEV_SERIAL)
+    if (ds->dev_type == SIMDEV_USB)
     {
         if (device_settings != NULL)
         {
@@ -838,9 +760,19 @@ int devsetup(const char* device_type, const char* device_subtype, const char* co
             {
               strtodevsubsubtype(temp, ds);
             }
+        }
+    }
 
-            config_setting_lookup_string(device_settings, "devpath", &temp);
-            ds->serialdevsettings.portdev = strdup(temp);
+    if (ds->dev_type == SIMDEV_SERIAL)
+    {
+        if (device_settings != NULL)
+        {
+            const char* temp = NULL;
+            int found = config_setting_lookup_string(device_settings, "subtype", &temp);
+            if(temp != NULL && found > 0)
+            {
+                strtodevsubsubtype(temp, ds);
+            }
 
             int motorposition = 8;
             config_setting_lookup_int(device_settings, "motors", &motorposition);
@@ -876,6 +808,121 @@ int devsetup(const char* device_type, const char* device_subtype, const char* co
             ds->serialdevsettings.fanpower = fanpower;
 
             slogt("set port baud rate to %i, ampfactor %f, fanpower %f", baud, ampfactor, fanpower);
+
+        }
+
+    }
+
+    ds->has_haptic_effects = false;
+    if (ds->dev_subtype == SIMDEVTYPE_USBHAPTIC || ds->dev_subtype == SIMDEVTYPE_USBWHEEL || ds->dev_type == SIMDEV_SOUND || ds->dev_subtype == SIMDEVTYPE_SERIALHAPTIC)
+    {
+        slogt("analysing haptic effect settings");
+        ds->has_haptic_effects = true;
+        const char* effect;
+        config_setting_lookup_string(device_settings, "effect", &effect);
+        strtoeffecttype(effect, ds);
+        if (ds->hapticsettings.effect_type == EFFECT_TYRESLIP || ds->hapticsettings.effect_type == EFFECT_TYRELOCK || ds->hapticsettings.effect_type == EFFECT_ABSBRAKES || ds->hapticsettings.effect_type == EFFECT_SUSPENSION )
+        {
+            gettyre(device_settings, ds);
+            ds->hapticsettings.threshold = 0;
+            int found = config_setting_lookup_float(device_settings, "threshold", &ds->hapticsettings.threshold);
+        }
+
+        slogi("reading configured haptic effect settings");
+        ds->hapticsettings.frequency = 0;
+        ds->hapticsettings.frequencyMax = 0;
+        ds->hapticsettings.amplitude = 50;
+        ds->hapticsettings.amplitudeMax = 50;
+        if (ds->hapticsettings.effect_type == EFFECT_GEARSHIFT)
+        {
+            ds->hapticsettings.duration = .125;
+        }
+        if (device_settings != NULL)
+        {
+            config_setting_lookup_int(device_settings, "frequency", &ds->hapticsettings.frequency);
+            config_setting_lookup_int(device_settings, "frequencyMax", &ds->hapticsettings.frequencyMax);
+            config_setting_lookup_int(device_settings, "amplitude", &ds->hapticsettings.amplitude);
+            config_setting_lookup_float(device_settings, "duration", &ds->hapticsettings.duration);
+            config_setting_lookup_int(device_settings, "amplitudeMax", &ds->hapticsettings.amplitudeMax);
+
+            const char* temp = NULL;
+            int found = 0;
+            found = config_setting_lookup_string(device_settings, "modulation", &temp);
+            ds->hapticsettings.modulation = EFFECT_MODULATION_NONE;
+            if (found == 0)
+            {
+                ds->hapticsettings.modulation = EFFECT_MODULATION_NONE;
+                slogd("Effect modulation not found, set to none");
+            }
+            else
+            {
+                if(strcicmp(temp, "FREQUENCY") == 0)
+                {
+                    ds->hapticsettings.modulation = EFFECT_MODULATION_FREQUENCY;
+                    if(ds->hapticsettings.frequencyMax == 0 || ds->hapticsettings.frequencyMax < ds->hapticsettings.frequency)
+                    {
+                        ds->hapticsettings.modulation = EFFECT_MODULATION_NONE;
+                        slogw("Falling back to no frequency modulation since frequencyMax is either not set or set below target frequency");
+                    }
+                    else
+                    {
+                        slogi("Effect modulation found, set to FREQUENCY");
+                    }
+                }
+                else if(strcicmp(temp, "AMPLIFY") == 0)
+                {
+                    ds->hapticsettings.modulation = EFFECT_MODULATION_AMPLIFY;
+                    slogi("Effect modulation found, set to AMPLIFY");
+                }
+                else
+                {
+                    slogw("%s is not a valid modulation type, falling back to no effect modulation");
+                    ds->hapticsettings.modulation = EFFECT_MODULATION_NONE;
+                }
+            }
+
+            ds->hapticsettings.motorposition = 0;
+            int motorposition = 1;
+            config_setting_lookup_int(device_settings, "motors", &motorposition);
+            ds->hapticsettings.motorposition = motorposition;
+        }
+
+        if (ds->dev_type == SIMDEV_SOUND)
+        {
+            slogi("reading configured sound device settings");
+            ds->sounddevsettings.volume = 0;
+            ds->sounddevsettings.pan = 0;
+            ds->sounddevsettings.channels = 1;
+            ds->sounddevsettings.noise = 0;
+            if (ds->hapticsettings.effect_type == EFFECT_GEARSHIFT)
+            {
+                ds->hapticsettings.duration = .125;
+            }
+            if (device_settings != NULL)
+            {
+
+                config_setting_lookup_int(device_settings, "volume", &ds->sounddevsettings.volume);
+                config_setting_lookup_int(device_settings, "pan", &ds->sounddevsettings.pan);
+                config_setting_lookup_int(device_settings, "channels", &ds->sounddevsettings.channels);
+                config_setting_lookup_int(device_settings, "noise", &ds->sounddevsettings.noise);
+
+                const char* temp = NULL;
+                int found = 0;
+                found = config_setting_lookup_string(device_settings, "devid", &temp);
+                if (found == CONFIG_FALSE)
+                {
+                    ds->dev = NULL;
+                }
+                else
+                {
+                    if(temp != NULL)
+                    {
+                        ds->dev = strdup(temp);
+                    }
+                }
+
+
+            }
 
         }
 
@@ -952,21 +999,516 @@ int uiloadconfig(const char* config_file_str, int confignum, int configureddevic
     return numdevices;
 }
 
-int settingsfree(DeviceSettings ds)
+int getsingledevice(const char* config_file_str, int confignum, int devicenum, MonocoqueSettings* ms, DeviceSettings* ds)
 {
-    if (ds.dev_type == SIMDEV_SERIAL)
+    int numdevices = 0;
+    config_t cfg;
+    config_init(&cfg);
+    if (!config_read_file(&cfg, config_file_str))
     {
-        if (ds.serialdevsettings.portdev != NULL)
+        fprintf(stderr, "%s:%d - %s\n", config_error_file(&cfg), config_error_line(&cfg), config_error_text(&cfg));
+    }
+    else
+    {
+        slogi("Parsing config file");
+
+        config_setting_t* config = NULL;
+        config = config_lookup(&cfg, "configs");
+        config_setting_t* selectedconfig = config_setting_get_elem(config, confignum);
+        config_setting_t* config_devices = NULL;
+        config_devices = config_setting_lookup(selectedconfig, "devices");
+        int num_devices = config_setting_length(config_devices);
+
+        int i = 0;
+
+        int error = MONOCOQUE_ERROR_NONE;
+        while (i<num_devices)
         {
-            free(ds.serialdevsettings.portdev);
+            if(i!=devicenum)
+            {
+                i++;
+                continue;
+            }
+            error = MONOCOQUE_ERROR_NONE;
+
+            config_setting_t* config_device = config_setting_get_elem(config_devices, i);
+            const char* device_type = NULL;
+            const char* device_subtype = NULL;
+            const char* device_config_file = NULL;
+            int found = 0;
+            config_setting_lookup_string(config_device, "device", &device_type);
+            config_setting_lookup_string(config_device, "type", &device_subtype);
+            found = config_setting_lookup_string(config_device, "config", &device_config_file);
+
+            slogt("device type: %s", device_type);
+            slogt("device sub type: %s", device_subtype);
+            if(found == CONFIG_FALSE)
+            {
+                device_config_file = NULL;
+            }
+            else
+            {
+                slogt("device config file: %s", device_config_file);
+            }
+            if (error == MONOCOQUE_ERROR_NONE)
+            {
+                error = devsetup(device_type, device_subtype, device_config_file, ms, ds, config_device);
+            }
+            if (error == MONOCOQUE_ERROR_NONE)
+            {
+                numdevices++;
+            }
+
+
+            i++;
+
         }
     }
-    if (ds.dev_type == SIMDEV_SOUND)
+
+
+    config_destroy(&cfg);
+    return numdevices;
+}
+
+static const char *haptic_effect_type_to_string(VibrationEffectType effect)
+{
+    switch (effect)
     {
-        if (ds.sounddevsettings.dev != NULL)
+        case EFFECT_ENGINERPM:
+            return "EngineRPM";
+
+        case EFFECT_GEARSHIFT:
+            return "GearShift";
+
+        case EFFECT_ABSBRAKES:
+            return "ABS";
+
+        case EFFECT_TYRESLIP:
+            return "TyreSlip";
+
+        case EFFECT_TYRELOCK:
+            return "TyreLock";
+
+        case EFFECT_SUSPENSION:
+            return "Suspension";
+
+        default:
+            return NULL;
+    }
+}
+
+static const char *tyre_identifier_to_string(MonocoqueTyreIdentifier tyre)
+{
+    switch (tyre)
+    {
+        case FRONTLEFT:
+            return "FrontLeft";
+
+        case FRONTRIGHT:
+            return "FrontRight";
+
+        case REARLEFT:
+            return "RearLeft";
+
+        case REARRIGHT:
+            return "RearRight";
+
+        case FRONTS:
+            return "Front";
+
+        case REARS:
+            return "Rear";
+
+        case ALLFOUR:
+            return "ALL";
+
+        default:
+            return NULL;
+    }
+}
+
+static const char *modulation_type_to_string(EffectModulationType modulation)
+{
+    switch (modulation)
+    {
+        case EFFECT_MODULATION_NONE:
+            return "none";
+
+        case EFFECT_MODULATION_FREQUENCY:
+            return "frequency";
+
+        case EFFECT_MODULATION_AMPLIFY:
+            return "amplify";
+
+        default:
+            return NULL;
+    }
+}
+
+
+static int set_string(config_setting_t *parent, const char *name, const char *value)
+{
+    config_setting_t *setting;
+
+    if (value == NULL)
+        return 1;
+
+    setting = config_setting_lookup(parent, name);
+
+    if (setting == NULL)
+        setting = config_setting_add(parent, name, CONFIG_TYPE_STRING);
+
+    if (setting == NULL)
+        return 0;
+
+    return config_setting_set_string(setting, value);
+}
+
+static int set_int(config_setting_t *parent, const char *name, int value)
+{
+    config_setting_t *setting;
+
+    setting = config_setting_lookup(parent, name);
+
+    if (setting == NULL)
+        setting = config_setting_add(parent, name, CONFIG_TYPE_INT);
+
+    if (setting == NULL)
+        return 0;
+
+    return config_setting_set_int(setting, value);
+}
+
+int set_float(config_setting_t *parent, const char *name, double value)
+{
+    config_setting_t *setting;
+
+    setting = config_setting_lookup(parent, name);
+
+    if (setting == NULL)
+        setting = config_setting_add(parent, name, CONFIG_TYPE_FLOAT);
+
+    if (setting == NULL)
+        return 0;
+
+    return config_setting_set_float(setting, value);
+}
+
+int delete_device_config(config_t *cfg, const char *configfile, int confignum, int devicenum)
+{
+    config_setting_t *configs;
+    config_setting_t *config;
+    config_setting_t *devices;
+
+    configs = config_lookup(cfg, "configs");
+    if (configs == NULL)
+        return -1;
+
+    config = config_setting_get_elem(configs, confignum);
+    if (config == NULL)
+        return -1;
+
+    devices = config_setting_lookup(config, "devices");
+    if (devices == NULL)
+        return -1;
+
+    if (devicenum < 0 || devicenum >= config_setting_length(devices))
+        return -1;
+
+    if (!config_setting_remove_elem(devices, devicenum))
+        return -1;
+
+    if (!config_write_file(cfg, configfile))
+        return -1;
+
+    return 0;
+}
+
+static const char *device_type_to_string(DeviceType device_type)
+{
+    switch (device_type)
+    {
+        case SIMDEV_USB:
+            return "USB";
+        case SIMDEV_SOUND:
+            return "Sound";
+        case SIMDEV_SERIAL:
+            return "Serial";
+        case SIMDEV_UNKNOWN:
+            return "Unknown";
+        default:
+            return "Unknown";
+    }
+}
+
+static const char *device_subtype_to_string(DeviceSubType device_subtype)
+{
+    switch (device_subtype)
+    {
+        case SIMDEVTYPE_SOUNDHAPTIC:
+            return "SoundHaptic";
+        case SIMDEVTYPE_TACHOMETER:
+            return "Tachometer";
+        case SIMDEVTYPE_USBHAPTIC:
+            return "UsbHaptic";
+        case SIMDEVTYPE_USBWHEEL:
+            return "UsbWheel";
+        case SIMDEVTYPE_SHIFTLIGHTS:
+            return "ShiftLights";
+        case SIMDEVTYPE_SIMWIND:
+            return "SimWind";
+        case SIMDEVTYPE_SERIALHAPTIC:
+            return "SerialHaptic";
+        case SIMDEVTYPE_SERIALWHEEL:
+            return "Wheel";
+        case SIMDEVTYPE_SIMLED:
+            return "Simleds";
+        case SIMDEVTYPE_ARDUINOCUSTOM:
+            return "ArduinoCustom";
+        case SIMDEVTYPE_UNKNOWN:
+        default:
+            return "Unknown";
+    }
+}
+
+static const char *haptic_effect_to_string(VibrationEffectType effect)
+{
+    switch (effect)
+    {
+        case EFFECT_ENGINERPM:
+            return "Engine";
+        case EFFECT_GEARSHIFT:
+            return "Gear";
+        case EFFECT_ABSBRAKES:
+            return "ABS";
+        case EFFECT_TYRESLIP:
+            return "TyreSlip";
+        case EFFECT_TYRELOCK:
+            return "TyreLock";
+        case EFFECT_SUSPENSION:
+            return "Suspension";
+        default:
+            return "Unknown";
+    }
+}
+
+static const char *modulation_to_string(EffectModulationType modulation)
+{
+    switch (modulation)
+    {
+        case EFFECT_MODULATION_NONE:
+            return "None";
+        case EFFECT_MODULATION_FREQUENCY:
+            return "Frequency";
+        case EFFECT_MODULATION_AMPLIFY:
+            return "Amplitude";
+        default:
+            return "Unknown";
+    }
+}
+
+static const char *tyre_to_string(MonocoqueTyreIdentifier tyre)
+{
+    switch (tyre)
+    {
+        case FRONTLEFT:
+            return "FrontLeft";
+        case FRONTRIGHT:
+            return "FrontRight";
+        case REARLEFT:
+            return "RearLeft";
+        case REARRIGHT:
+            return "RearRight";
+        case FRONTS:
+            return "Fronts";
+        case REARS:
+            return "Rears";
+        case ALLFOUR:
+            return "All";
+        default:
+            return "Unknown";
+    }
+}
+
+int save_device_config(config_t *cfg, const char* configfile, int confignum, int devicenum, const DeviceSettings *ds)
+{
+    config_setting_t *configs;
+    config_setting_t *config_entry;
+    config_setting_t *devices;
+    config_setting_t *device_entry;
+
+    if (cfg == NULL || ds == NULL)
+        return 0;
+
+    slogd("Saving device with device num %i and confignum %i", devicenum, confignum);
+    configs = config_lookup(cfg, "configs");
+    if (configs == NULL)
+        return 0;
+
+    config_entry = config_setting_get_elem(configs, confignum);
+    if (config_entry == NULL)
+        return 0;
+
+    devices = config_setting_lookup(config_entry, "devices");
+    if (devices == NULL)
+        return 0;
+
+    device_entry = config_setting_get_elem(devices, devicenum);
+    if (device_entry == NULL)
+    {
+        device_entry = config_setting_add(devices, NULL, CONFIG_TYPE_GROUP);
+
+        if (device_entry == NULL)
+            return 0;
+
+        if (config_setting_index(device_entry) != devicenum)
+            return 0;
+    }
+    if (device_entry == NULL)
+        return 0;
+
+    set_string(device_entry, "device", device_type_to_string(ds->dev_type));
+    
+    set_int(device_entry, "fps", ds->fps);
+
+    if (ds->specific_config_file != NULL)
+    {
+        set_string(device_entry, "config", ds->specific_config_file);
+    }
+    if (ds->dev != NULL)
+    {
+        set_string(device_entry, "devid", ds->dev);
+    }
+
+    switch (ds->dev_type)
+    {
+
+        case SIMDEV_SERIAL:
         {
-            free(ds.sounddevsettings.dev);
+            set_string(device_entry, "type", device_subtype_to_string(ds->dev_type + SerialDevicesOffset));
+
+            const SerialDeviceSettings *ss = &ds->serialdevsettings;
+            
+            set_int(device_entry, "baud", ss->baud);
+
+            set_float(device_entry, "ampfactor", ss->ampfactor);
+
+            set_float(device_entry, "fanpower", ss->fanpower);
+
+            break;
         }
+
+        case SIMDEV_SOUND:
+        {
+            set_string(device_entry, "type", device_subtype_to_string(ds->dev_type));
+
+            const SoundDeviceSettings *ss = &ds->sounddevsettings;
+
+            set_int(device_entry, "volume", ss->volume);
+            set_int(device_entry, "pan", ss->pan);
+            set_int(device_entry, "channels", ss->channels);
+            set_int(device_entry, "noise", ss->noise);
+
+            break;
+        }
+
+        case SIMDEV_USB:
+        {
+            set_string(device_entry, "type", device_subtype_to_string(ds->dev_type + USBDevicesOffset));
+
+            const USBDeviceSettings *us = &ds->usbdevsettings;
+
+            break;
+        }
+
+        default:
+            break;
+    }
+
+    if(ds->has_haptic_effects == true)
+    {
+        slogt("Saving haptic effect settings");
+        const HapticEffectSettings *hs = &ds->hapticsettings;
+
+        set_int(device_entry, "frequency", hs->frequency);
+
+        set_int(device_entry, "amplitude", hs->amplitude);
+
+        set_int(device_entry, "frequencyMax", hs->frequencyMax);
+
+        set_int(device_entry, "amplitudeMax", hs->amplitudeMax);
+
+        set_float(device_entry, "threshold", hs->threshold);
+
+        set_float(device_entry, "duration", hs->duration);
+
+        set_string(device_entry, "effect", haptic_effect_to_string(hs->effect_type));
+         
+        set_string(device_entry, "tyre", tyre_to_string(hs->tyre));
+         
+        set_string(device_entry, "modulation", modulation_to_string(hs->modulation));
+    }
+
+    if(ds->has_led_effects == true)
+    {
+        slogt("Saving led effect settings");
+        const SerialDeviceSettings *ss = &ds->serialdevsettings;
+
+        set_int(device_entry, "numleds", ss->numleds);
+        set_int(device_entry, "startled", ss->startled);
+        set_int(device_entry, "endled", ss->endled);
+    }
+
+    if(!config_write_file(cfg, configfile))
+    {
+        return 1;
+    }
+    return 0;
+}
+
+config_t *open_monocoque_config(const char *filename)
+{
+    config_t *cfg;
+
+    if (filename == NULL)
+        return NULL;
+
+    cfg = malloc(sizeof(*cfg));
+    if (cfg == NULL)
+        return NULL;
+
+    config_init(cfg);
+
+    if (!config_read_file(cfg, filename))
+    {
+        fprintf(stderr,
+                "Failed to read config file '%s' (line %d): %s\n",
+                filename,
+                config_error_line(cfg),
+                config_error_text(cfg));
+
+        config_destroy(cfg);
+        free(cfg);
+
+        return NULL;
+    }
+
+    return cfg;
+}
+
+void close_monocoque_config(config_t* cfg)
+{
+    if (cfg == NULL)
+        return;
+
+    config_destroy(cfg);
+}
+
+int settingsfree(DeviceSettings ds)
+{
+    if (ds.dev != NULL)
+    {
+        free(ds.dev);
     }
 
     if(ds.has_config && ds.specific_config_file != NULL)
@@ -982,17 +1524,21 @@ int monocoquesettingsfree(MonocoqueSettings* ms)
     if(ms->tyre_diameter_config != NULL)
     {
         free(ms->tyre_diameter_config);
+        ms->tyre_diameter_config = NULL;
     }
     if(ms->config_str != NULL)
     {
         free(ms->config_str);
+        ms->config_str = NULL;
     }
     if(ms->log_filename_str != NULL)
     {
         free(ms->log_filename_str);
+        ms->log_filename_str = NULL;
     }
     if(ms->log_dirname_str != NULL)
     {
         free(ms->log_dirname_str);
+        ms->log_dirname_str = NULL;
     }
 }

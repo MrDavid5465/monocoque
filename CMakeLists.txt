@@ -10,6 +10,9 @@ endif()
 SET_SOURCE_FILES_PROPERTIES( src/monocoque.c PROPERTIES LANGUAGE C)
 #set(CMAKE_BUILD_TYPE Debug)
 
+option(BUILD_GUI "Build GUI support" OFF)
+option(BUILD_SHARED "Build monocoque shared library" OFF)
+
 
 project(monocoque)
 
@@ -50,7 +53,17 @@ endif()
 set(HIDAPI_WITH_LIBUSB FALSE) # surely will be used only on Linux
 set(BUILD_SHARED_LIBS TRUE) # HIDAPI as static library on all platforms
 
-add_executable(monocoque src/monocoque/monocoque.c)
+if(BUILD_SHARED)
+    add_library(monocoque SHARED src/monocoque/monocoque.c)
+else()
+    add_library(monocoque STATIC src/monocoque/monocoque.c)
+endif()
+add_executable(monocoque-cli src/monocoque/monocoque-cli.c)
+set_target_properties(monocoque-cli PROPERTIES OUTPUT_NAME monocoque)
+if(BUILD_GUI)
+    add_executable(monocoque-gui src/monocoque/monocoque-gui.c)
+    set_target_properties(monocoque-gui PROPERTIES OUTPUT_NAME gmonocoque)
+endif()
 
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(LIBPROCPS libprocps)
@@ -74,15 +87,25 @@ endif()
 
 message("Using pulseaudio backend...")
 add_compile_definitions(USE_PULSEAUDIO=true)
-target_link_libraries(monocoque m hidapi-hidraw pulse serialport xml2 argtable2 config gameloop helper devices slog simulatorapi uv xdg-basedir Lua::Lua proc2)
-
-target_include_directories(monocoque PUBLIC config ${LIBXML_INCLUDE_DIR} ${LUA_INCLUDE_DIR})
 
 add_subdirectory(src/monocoque/gameloop)
 add_subdirectory(src/monocoque/simulatorapi)
 add_subdirectory(src/monocoque/helper)
 add_subdirectory(src/monocoque/devices)
 add_subdirectory(src/monocoque/slog)
+
+target_link_libraries(monocoque m hidapi-hidraw pulse serialport xml2 argtable2 config gameloop helper devices slog simulatorapi uv xdg-basedir Lua::Lua proc2)
+target_include_directories(monocoque PUBLIC config ${LIBXML_INCLUDE_DIR} ${LUA_INCLUDE_DIR})
+target_link_libraries(monocoque-cli m hidapi-hidraw pulse serialport xml2 argtable2 config gameloop helper devices slog simulatorapi uv xdg-basedir Lua::Lua proc2)
+target_include_directories(monocoque-cli PUBLIC config ${LIBXML_INCLUDE_DIR} ${LUA_INCLUDE_DIR})
+if(BUILD_GUI)
+    add_subdirectory(src/monocoque/mgui)
+    target_link_libraries(monocoque-gui m hidapi-hidraw pulse serialport xml2 argtable2 config mgui gameloop helper devices slog simulatorapi uv xdg-basedir Lua::Lua proc2)
+    target_include_directories(monocoque-gui PUBLIC config ${LIBXML_INCLUDE_DIR} ${LUA_INCLUDE_DIR})
+endif()
+
+
+
 
 #add_executable(listusb tests/testlibusb.c)
 #target_include_directories(listusb PUBLIC)
@@ -166,7 +189,7 @@ else() # GCC/Clang warning option
 
     if(analyze)
         message("-- Analyzer is on")
-        target_compile_options(monocoque PRIVATE -fanalyzer -Wno-analyzer-possible-null-argument -Wno-analyzer-possible-null-dereference)
+        target_compile_options(monocoque PRIVATE -fanalyzer -Wno-analyzer-possible-null-argument -Wno-analyzer-possible-null-dereference -fsanitize=address -g -fno-omit-frame-pointer)
     endif()
 
     enable_cxx_compiler_flag_if_supported("-Wall")

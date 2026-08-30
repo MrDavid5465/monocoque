@@ -128,21 +128,20 @@ int GetNumberOfLeds(SerialDevice* serialdevice, int* numlights)
 
 int arduino_init(SerialDevice* serialdevice, const char* portdev)
 {
-    serialdevice->id = monocoque_serial_open(serialdevice, portdev);
-    return serialdevice->id;
+    int id = monocoque_serial_open(serialdevice, portdev);
+    if (id < 0) return id;
+    serialdevice->id = id;
+    return 0;
 }
 
 
 
 int arduino_custom_init(SerialDevice* serialdevice, const char* portdev, const char* luafile, bool uselights)
 {
-    serialdevice->id = monocoque_serial_open(serialdevice, portdev);
-
+    int error = arduino_init(serialdevice, portdev);
 
     int numlights = 0;
 
-    monocoque_serial_device serialdev = monocoque_serial_devices[serialdevice->id];
-    int error = 0;
     if(uselights == true)
     {
         error = GetNumberOfLeds(serialdevice, &numlights);
@@ -179,7 +178,7 @@ int arduino_custom_init(SerialDevice* serialdevice, const char* portdev, const c
 
     slogi("LUA config setup successful.");
     
-    return serialdevice->id;
+    return 0;
 }
 
 

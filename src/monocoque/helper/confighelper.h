@@ -13,27 +13,31 @@
 
 typedef enum
 {
-    SIMDEV_UNKNOWN    = 0,
-    SIMDEV_USB        = 1,
-    SIMDEV_SOUND      = 2,
-    SIMDEV_SERIAL     = 3
+    SIMDEV_USB        = 0,
+    SIMDEV_SOUND      = 1,
+    SIMDEV_SERIAL     = 2,
+    SIMDEV_UNKNOWN    = 3,
 }
 DeviceType;
 
 typedef enum
 {
     SIMDEVTYPE_UNKNOWN           = 0,
-    SIMDEVTYPE_TACHOMETER        = 1,
-    SIMDEVTYPE_USBHAPTIC         = 2,
-    SIMDEVTYPE_SHIFTLIGHTS       = 3,
-    SIMDEVTYPE_SIMWIND           = 4,
-    SIMDEVTYPE_SERIALHAPTIC      = 5,
-    SIMDEVTYPE_USBWHEEL          = 6,
-    SIMDEVTYPE_SERIALWHEEL       = 7,
-    SIMDEVTYPE_SIMLED            = 8,
-    SIMDEVTYPE_ARDUINOCUSTOM     = 9
+    SIMDEVTYPE_SOUNDHAPTIC       = 1,
+    SIMDEVTYPE_TACHOMETER        = 2,
+    SIMDEVTYPE_USBHAPTIC         = 3,
+    SIMDEVTYPE_USBWHEEL          = 4,
+    SIMDEVTYPE_SHIFTLIGHTS       = 5,
+    SIMDEVTYPE_SIMWIND           = 6,
+    SIMDEVTYPE_SERIALHAPTIC      = 7,
+    SIMDEVTYPE_SERIALWHEEL       = 8,
+    SIMDEVTYPE_SIMLED            = 9,
+    SIMDEVTYPE_ARDUINOCUSTOM     = 10,
 }
 DeviceSubType;
+
+#define SerialDevicesOffset 5
+#define USBDevicesOffset 2
 
 typedef enum
 {
@@ -46,7 +50,9 @@ typedef enum
     SIMDEVSUBTYPE_SIMAGICGTNEO            = 6,
     SIMDEVSUBTYPE_MOZA_NEW                = 7,
     SIMDEVSUBTYPE_LOGITECH_G29            = 8,
-    SIMDEVSUBTYPE_MOZA_KS_PRO_WHEEL       = 9
+    SIMDEVSUBTYPE_MOZA_KS_PRO_WHEEL       = 9,
+    SIMDEVSUBTYPE_SIMNETPEDALS            = 10,
+    SIMDEVSUBTYPE_REVBURNERTACHOMETER     = 11
 }
 DeviceSubSubType;
 
@@ -72,6 +78,14 @@ typedef enum
     EFFECT_SUSPENSION  = 5
 }
 VibrationEffectType;
+
+typedef enum
+{
+    EFFECT_MODULATION_NONE            = 0,
+    EFFECT_MODULATION_FREQUENCY       = 1,
+    EFFECT_MODULATION_AMPLIFY         = 2,
+}
+EffectModulationType;
 
 typedef enum
 {
@@ -146,6 +160,7 @@ typedef struct
     char* config_str;
     char* log_filename_str;
     char* log_dirname_str;
+    config_t* cfg;
 }
 MonocoqueSettings;
 
@@ -161,41 +176,46 @@ TachometerSettings;
 
 typedef struct
 {
-    char* portdev;
-
     MotorPosition motorsposition;
-    int numlights;
-    int numleds;
-    int startled;
-    int endled;
+    uint32_t numlights;
+    uint32_t numleds;
+    uint32_t startled;
+    uint32_t endled;
     float ampfactor;
     float fanpower;
-    int baud;
+    // baud is the only serial thing
+    uint32_t baud;
 }
 SerialDeviceSettings;
 
 typedef struct
 {
-    uint32_t frequency;
     uint32_t volume;
-    int lowbound_frequency;
-    int upperbound_frequency;
-    uint32_t frequencyMax;
-    uint32_t amplitudeMax;
-    uint32_t amplitude;
-    int pan;
-    int channels;
-    double duration;
-    char* dev;
-    SoundEffectModulationType modulation;
-    int noise;
+    uint32_t pan;
+    uint32_t channels;
+    uint32_t noise;
 }
 SoundDeviceSettings;
 
 typedef struct
 {
-    int value0;
-    int value1;
+    uint32_t frequency;
+    uint32_t amplitude;
+    uint32_t frequencyMax;
+    uint32_t amplitudeMax;
+
+    double threshold;
+    double duration;
+
+    MotorPosition motorposition;
+    VibrationEffectType effect_type;
+    MonocoqueTyreIdentifier tyre;
+    EffectModulationType modulation;
+}
+HapticEffectSettings;
+
+typedef struct
+{
     char* dev;
 }
 USBDeviceSettings;
@@ -203,18 +223,19 @@ USBDeviceSettings;
 typedef struct
 {
     bool is_valid;
-    int fps;
+
     DeviceType dev_type;
     DeviceSubType dev_subtype;
     DeviceSubSubType dev_subsubtype;
-    // to get really fancy move the effect information to it's own structure that would be a member of
-    // any device settings member structure that can carry an effect
-    VibrationEffectType effect_type;
-    MonocoqueTyreIdentifier tyre;
-    double threshold;
+    bool has_haptic_effects;
+    bool has_led_effects;
+
+    char* dev;
     bool has_config;
     char* specific_config_file;
+    uint32_t fps;
     // union?
+    HapticEffectSettings hapticsettings;
     TachometerSettings tachsettings;
     SerialDeviceSettings serialdevsettings;
     SoundDeviceSettings sounddevsettings;
@@ -236,9 +257,16 @@ int getconfigtouse2(const char* config_file_str, char* car, int sim);
 int getconfigtouse1(const char* config_file_str, char* car, int sim);
 int getconfigtouse(const char* config_file_str, char* car, int sim);
 
+config_t *open_monocoque_config(const char *filename);
+void close_monocoque_config(config_t *cfg);
+
+int delete_device_config(config_t *cfg, const char *configfile, int confignum, int devicenum);
+int save_device_config(config_t *cfg, const char* configfile, int confignum, int devicenum, const DeviceSettings *ds);
 int configcheck(const char* config_file_str, int confignum, int* devices);
 
 int uiloadconfig(const char* config_file_str, int confignum, int configureddevices, MonocoqueSettings* ms, DeviceSettings* ds);
+
+int getsingledevice(const char* config_file_str, int confignum, int devicenum, MonocoqueSettings* ms, DeviceSettings* ds);
 
 int getNumberOfConfigs(const char* config_file_str);
 #endif

@@ -23,6 +23,16 @@
 bool go = false;
 bool go2 = false;
 struct sigaction act;
+static pthread_t loop_thread;
+static uv_loop_t *loop = NULL;
+
+SimData* simdata;
+SimMap* simmap;
+loop_data* baton;
+
+device_loop_data* test_baton;
+SimDevice* test_simdevice;
+SimInfo* test_siminfo;
 
 
 uv_idle_t idler;
@@ -30,10 +40,11 @@ uv_timer_t datachecktimer;
 uv_timer_t showstatstimer;
 uv_timer_t datamaptimer;
 uv_timer_t tyrediametertimer;
+uv_timer_t testdevicetimer;
 uv_udp_t recv_socket;
 
 bool doui = false;
-int appstate = 0;
+
 
 void shmdatamapcallback(uv_timer_t* handle);
 void showstatscallback(uv_timer_t* handle);
@@ -354,7 +365,7 @@ void looprun(MonocoqueSettings* ms, loop_data* f, SimData* simdata)
         }
 
 
-        uv_timer_start(&showstatstimer, showstatscallback, 0, 100);
+        //uv_timer_start(&showstatstimer, showstatscallback, 0, 100);
         doui = false;
     }
 }
@@ -629,11 +640,240 @@ void cb(uv_poll_t* handle, int status, int events)
 
 
 
+void* monocoque_mainloop_start(void* arg)
+{
+    MonocoqueSettings* ms = arg;
+    simdata = malloc(sizeof(SimData));
+    simmap = simapi_simmap_create();
+    slogd("setting initial app state");
+    appstate = 1;
+
+    //struct pollfd mypoll = { STDIN_FILENO, POLLIN|POLLPRI };
+    //uv_poll_t* poll = (uv_poll_t*) malloc(uv_handle_size(UV_POLL));
+
+    baton = (loop_data*) malloc(sizeof(loop_data));
+    baton->siminfo.mapapi = -1;
+    baton->simmap = simmap;
+    baton->simdata = simdata;
+    baton->ms = ms;
+    baton->uion = false;
+    baton->releasing = false;
+    baton->use_udp = false;
+    baton->req.data = (void*) baton;
+
+
+    simapi_set_log_info(simapilib_loginfo);
+    simapi_set_log_debug(simapilib_logdebug);
+    simapi_set_log_trace(simapilib_logtrace);
+
+    //if (0 != uv_poll_init(uv_default_loop(), poll, 0))
+    //{
+    //    return NULL;
+    //};
+   
+    uv_udp_init(loop, &recv_socket);
+    uv_timer_init(loop, &datachecktimer);
+    uv_timer_init(loop, &datamaptimer);
+    uv_timer_init(loop, &tyrediametertimer);
+
+
+
+    uv_handle_set_data((uv_handle_t*) &datachecktimer, (void*) baton);
+    uv_handle_set_data((uv_handle_t*) &datamaptimer, (void*) baton);
+    //uv_handle_set_data((uv_handle_t*) &showstatstimer, (void*) baton);
+    uv_handle_set_data((uv_handle_t*) &recv_socket, (void*) baton);
+    //}
+    //uv_handle_set_data((uv_handle_t*) poll, (void*) baton);
+
+    //if (0 != uv_poll_start(poll, UV_READABLE, cb))
+    //{
+    //    return NULL;
+    //};
+
+    uv_timer_start(&datachecktimer, datacheckcallback, 1000, 1000);
+
+    //fprintf(stdout, "Searching for sim data... Press q to quit...\n");
+    uv_run(loop, UV_RUN_DEFAULT);
+
+    return NULL;
+}
+
+SimData* get_test_simdata()
+{
+    if(test_baton == NULL)
+    {
+        return NULL;
+    }
+    return test_baton->simdata;
+}
+
+void* monocoque_testloop_start(void* arg)
+{
+    test_loop_args* args = arg;
+    simmap = simapi_simmap_create();
+
+
+    simapi_set_log_info(simapilib_loginfo);
+    simapi_set_log_debug(simapilib_logdebug);
+    simapi_set_log_trace(simapilib_logtrace);
+
+
+    DeviceSettings ds;
+    //int numdevices = getsingledevice(args->ms->config_str, args->confignum, args->devicenum, args->ms, &ds);
+    test_simdevice = malloc(1 * sizeof(SimDevice));
+    test_siminfo = malloc(sizeof(SimInfo));
+    simapi_set_faux_siminfo(test_siminfo);
+    int initdevices = devinit(test_simdevice, test_siminfo, 1, args->ds, args->ms);
+    //settingsfree(ds);
+
+
+
+    test_baton->siminfo.mapapi = -1;
+    test_baton->simdevice = test_simdevice;
+
+    test_baton->ms = args->ms;
+    test_baton->req.data = (void*) test_baton;
+
+
+    uv_timer_init(loop, &testdevicetimer);
+    uv_handle_set_data((uv_handle_t*) &testdevicetimer, (void*) test_baton);
+    uv_timer_start(&testdevicetimer, devicetimercallback, 1000, 16);
+
+    uv_run(loop, UV_RUN_DEFAULT);
+
+
+    return NULL;
+}
+
+int monocoque_testloop_stop()
+{
+    uv_timer_stop(&testdevicetimer);
+
+    uv_stop(loop);
+    pthread_join(loop_thread, NULL);
+
+    uv_run(loop, UV_RUN_NOWAIT);
+    uv_walk(loop, close_walk_cb, NULL);
+    uv_loop_close(loop);
+    uv_library_shutdown();
+
+    slogi("All threads stopped...");
+
+    test_simdevice->free(test_simdevice);
+    free(loop);
+    free(test_baton);
+    //free(simdata);
+    free(simmap);
+
+    return 0;
+}
+
+int monocoque_mainloop_stop(MonocoqueSettings* ms)
+{
+
+    uv_udp_recv_stop(&recv_socket);
+    uv_timer_stop(&datamaptimer);
+    uv_timer_stop(&datachecktimer);
+
+    uv_stop(loop);
+    pthread_join(loop_thread, NULL);
+
+    uv_run(loop, UV_RUN_NOWAIT);
+    uv_walk(loop, close_walk_cb, NULL);
+    uv_loop_close(loop);
+    uv_library_shutdown();
+
+    slogi("All threads stopped...");
+
+    free(loop);
+    free(baton);
+    free(simdata);
+    free(simmap);
+
+    appstate = 0;
+    return 0;
+}
+
+
+int start_loop(MonocoqueSettings* ms)
+{
+    loop = malloc(sizeof(uv_loop_t));
+
+    if (loop == NULL)
+    {
+        return -1;
+    }
+
+    if (uv_loop_init(loop) != 0)
+    {
+        free(loop);
+        loop = NULL;
+        return -1;
+    }
+    return pthread_create(&loop_thread, NULL, monocoque_mainloop_start, ms);
+}
+
+int start_test(test_loop_args* test_data)
+{
+
+    test_baton = (device_loop_data*) malloc(sizeof(device_loop_data));
+    test_baton->simdata = test_data->simdata;
+
+    loop = malloc(sizeof(uv_loop_t));
+
+    if (loop == NULL)
+    {
+        return -1;
+    }
+
+    if (uv_loop_init(loop) != 0)
+    {
+        free(loop);
+        loop = NULL;
+        return -1;
+    }
+    return pthread_create(&loop_thread, NULL, monocoque_testloop_start, test_data);
+}
+
+const char* get_simexe_name(void)
+{
+    if(appstate <= 0)
+    {
+        return "None Detected";
+    }
+    if(baton == NULL)
+    {
+        return "None Detected";
+    }
+    if(baton->siminfo.simulatorexe <= 0)
+    {
+        return "None Detected";
+    }
+    return simapi_gametofullstr(baton->siminfo.simulatorexe);
+}
+
+const char* get_simd_onoff(void)
+{
+    if(appstate <= 0)
+    {
+        return "Not Detected";
+    }
+    if(baton == NULL)
+    {
+        return "Not Detected";
+    }
+    if(baton->siminfo.mapapi == 0)
+    {
+        return "Running";
+    }
+    return "Not Detected";
+}
+
 int monocoque_mainloop(MonocoqueSettings* ms)
 {
 
-    SimData* simdata = malloc(sizeof(SimData));
-    SimMap* simmap = simapi_simmap_create();
+    simdata = malloc(sizeof(SimData));
+    simmap = simapi_simmap_create();
 
     struct termios newsettings, canonicalmode;
     tcgetattr(0, &canonicalmode);
@@ -647,7 +887,7 @@ int monocoque_mainloop(MonocoqueSettings* ms)
 
     uv_poll_t* poll = (uv_poll_t*) malloc(uv_handle_size(UV_POLL));
 
-    loop_data* baton = (loop_data*) malloc(sizeof(loop_data));
+    baton = (loop_data*) malloc(sizeof(loop_data));
     baton->simmap = simmap;
     baton->simdata = simdata;
     baton->ms = ms;
@@ -706,6 +946,58 @@ int monocoque_mainloop(MonocoqueSettings* ms)
     return 0;
 }
 
+void set_basic_simdata(SimData* simdata)
+{
+    simdata->car[0] = 'C';
+    simdata->car[1] = 'A';
+    simdata->car[2] = 'R';
+    simdata->car[3] = '\0';
+    simdata->gear = SIMAPI_GEAR_NEUTRAL;
+    simdata->gearc[0] = 0x4e;
+    simdata->gearc[1] = 0;
+    simdata->velocity = 160;
+    simdata->rpms = 7000;
+    simdata->maxrpm = 8000;
+    simdata->abs = 0;
+    simdata->tyrediameter[0] = -1;
+    simdata->tyrediameter[1] = -1;
+    simdata->tyrediameter[2] = -1;
+    simdata->tyrediameter[3] = -1;
+    simdata->tyreslipratio[0] = 0;
+    simdata->tyreslipratio[1] = 0;
+    simdata->tyreslipratio[2] = 0;
+    simdata->tyreslipratio[3] = 0;
+    simdata->Xvelocity = 0;
+    simdata->Yvelocity = 100;
+    simdata->Zvelocity = 0;
+}
+
+void set_wheel_spin_simdata(SimData* simdata)
+{
+    simdata->velocity = 15;
+    simdata->tyreRPS[0] = 50;
+    simdata->tyreRPS[1] = 50;
+    simdata->tyreRPS[2] = 50;
+    simdata->tyreRPS[3] = 50;
+    simdata->tyrediameter[0] = 0.638636385206394;
+    simdata->tyrediameter[1] = 0.633384434597093;
+    simdata->tyrediameter[2] = 0.710475735564615;
+    simdata->tyrediameter[3] = 0.710475735564615;
+}
+
+void set_wheel_lock_simdata(SimData* simdata)
+{
+    simdata->velocity = 150;
+    simdata->tyreRPS[0] = 25;
+    simdata->tyreRPS[1] = 25;
+    simdata->tyreRPS[2] = 25;
+    simdata->tyreRPS[3] = 25;
+    simdata->tyrediameter[0] = 0.638636385206394;
+    simdata->tyrediameter[1] = 0.633384434597093;
+    simdata->tyrediameter[2] = 0.710475735564615;
+    simdata->tyrediameter[3] = 0.710475735564615;
+}
+
 int tester(SimDevice* devices, int numdevices)
 {
 
@@ -737,6 +1029,10 @@ int tester(SimDevice* devices, int numdevices)
     simdata->tyrediameter[1] = -1;
     simdata->tyrediameter[2] = -1;
     simdata->tyrediameter[3] = -1;
+    simdata->tyreslipratio[0] = 0;
+    simdata->tyreslipratio[1] = 0;
+    simdata->tyreslipratio[2] = 0;
+    simdata->tyreslipratio[3] = 0;
     simdata->Xvelocity = 0;
     simdata->Yvelocity = 100;
     simdata->Zvelocity = 0;
