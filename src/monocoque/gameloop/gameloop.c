@@ -4,6 +4,7 @@
 #include <string.h>
 #include <unistd.h>
 #include <sys/stat.h>
+#include <sys/mman.h>
 #include <poll.h>
 #include <termios.h>
 #include <signal.h>
@@ -16,6 +17,7 @@
 #include "../devices/hapticeffect.h"
 #include "../simulatorapi/simapi/simapi/simdata.h"
 #include "../simulatorapi/simapi/simapi/simmapper.h"
+#include "../simulatorapi/simapi/simapi/simmap.h"
 #include "../slog/slog.h"
 
 #define DEFAULT_UPDATE_RATE      240.0
@@ -998,11 +1000,45 @@ void set_wheel_lock_simdata(SimData* simdata)
     simdata->tyrediameter[3] = 0.710475735564615;
 }
 
+// Drives every initialized device with the current test simdata, then
+// mirrors that same simdata into the SIMAPI.DAT shared memory segment (if
+// available) so external tools - dashboards, telemetry viewers, anything
+// that reads SIMAPI.DAT the same way a real running sim would populate it -
+// can follow monocoque's own test sequence instead of seeing nothing.
+static void update_devices(SimDevice* devices, int numdevices, SimData* simdata, SimMap* testsimmap)
+{
+    for (int x = 0; x < numdevices; x++)
+    {
+        if (devices[x].initialized == true)
+        {
+            devices[x].update(&devices[x], simdata);
+        }
+    }
+    if (testsimmap != NULL && testsimmap->addr != NULL)
+    {
+        simdata->mtick++;
+        memcpy(testsimmap->addr, simdata, sizeof(SimData));
+    }
+}
+
 int tester(SimDevice* devices, int numdevices)
 {
 
     slogi("preparing test with %i devices...", numdevices);
     SimData* simdata = malloc(sizeof(SimData));
+    memset(simdata, 0, sizeof(SimData));
+    simdata->simon = true;
+    simdata->simstatus = SIMAPI_STATUS_ACTIVEPLAY;
+
+    SimMap* testsimmap = malloc(sizeof(SimMap));
+    memset(testsimmap, 0, sizeof(SimMap));
+    int shmerr = simapi_universalmap_open(testsimmap, simdata);
+    if (shmerr != SIMAPI_ERROR_NONE)
+    {
+        slog_warn("Could not open shared telemetry memory for test mode (error %i) - test sequence will still drive local devices, but external tools won't see it", shmerr);
+        free(testsimmap);
+        testsimmap = NULL;
+    }
 
     struct termios newsettings, canonicalmode;
     tcgetattr(0, &canonicalmode);
@@ -1044,38 +1080,20 @@ int tester(SimDevice* devices, int numdevices)
     for (int r = 0; r < 8000; r += 3)
     {
         simdata->rpms = 1000 + r;
-        for (int x = 0; x < numdevices; x++)
-        {
-            if (devices[x].initialized == true)
-            {
-                devices[x].update(&devices[x], simdata);
-            }
-        }
+        update_devices(devices, numdevices, simdata, testsimmap);
         usleep(1000);
     }
 
     for (int r = 0; r < 8000; r += 3)
     {
         simdata->rpms = 9000 - r;
-        for (int x = 0; x < numdevices; x++)
-        {
-            if (devices[x].initialized == true)
-            {
-                devices[x].update(&devices[x], simdata);
-            }
-        }
+        update_devices(devices, numdevices, simdata, testsimmap);
         usleep(1000);
     }
 
     fprintf(stdout, "Setting rpms to 1000\n");
     simdata->rpms = 1000;
-    for (int x = 0; x < numdevices; x++)
-    {
-        if (devices[x].initialized == true)
-        {
-            devices[x].update(&devices[x], simdata);
-        }
-    }
+    update_devices(devices, numdevices, simdata, testsimmap);
     sleep(3);
 
     fprintf(stdout, "Green Flag!\n");
@@ -1084,24 +1102,12 @@ int tester(SimDevice* devices, int numdevices)
     fprintf(stdout, "Shifting into first gear\n");
     simdata->gear = SIMAPI_GEAR_FIRST;
     simdata->gearc[0] = 0x31;
-    for (int x = 0; x < numdevices; x++)
-    {
-        if (devices[x].initialized == true)
-        {
-            devices[x].update(&devices[x], simdata);
-        }
-    }
+    update_devices(devices, numdevices, simdata, testsimmap);
     sleep(3);
 
     fprintf(stdout, "Setting speed to 100\n");
     simdata->velocity = 100;
-    for (int x = 0; x < numdevices; x++)
-    {
-        if (devices[x].initialized == true)
-        {
-            devices[x].update(&devices[x], simdata);
-        }
-    }
+    update_devices(devices, numdevices, simdata, testsimmap);
     sleep(3);
 
     fprintf(stdout, "testing wheel spin\n");
@@ -1114,13 +1120,7 @@ int tester(SimDevice* devices, int numdevices)
     simdata->tyrediameter[1] = 0.633384434597093;
     simdata->tyrediameter[2] = 0.710475735564615;
     simdata->tyrediameter[3] = 0.710475735564615;
-    for (int x = 0; x < numdevices; x++)
-    {
-        if (devices[x].initialized == true)
-        {
-            devices[x].update(&devices[x], simdata);
-        }
-    }
+    update_devices(devices, numdevices, simdata, testsimmap);
     sleep(3);
 
     fprintf(stdout, "Testing wheel Lock\n");
@@ -1129,13 +1129,7 @@ int tester(SimDevice* devices, int numdevices)
     simdata->tyreRPS[2] = 25;
     simdata->tyreRPS[3] = 25;
     simdata->velocity = 150;
-    for (int x = 0; x < numdevices; x++)
-    {
-        if (devices[x].initialized == true)
-        {
-            devices[x].update(&devices[x], simdata);
-        }
-    }
+    update_devices(devices, numdevices, simdata, testsimmap);
     sleep(3);
 
     fprintf(stdout, "Shifting into second gear\n");
@@ -1150,13 +1144,7 @@ int tester(SimDevice* devices, int numdevices)
     simdata->abs = 0;
     simdata->gear = SIMAPI_GEAR_SECOND;
     simdata->gearc[0] = 0x32;
-    for (int x = 0; x < numdevices; x++)
-    {
-        if (devices[x].initialized == true)
-        {
-            devices[x].update(&devices[x], simdata);
-        }
-    }
+    update_devices(devices, numdevices, simdata, testsimmap);
     sleep(3);
 
     fprintf(stdout, "Testing abs brake lock Lock\n");
@@ -1169,13 +1157,7 @@ int tester(SimDevice* devices, int numdevices)
     simdata->tyrediameter[2] = 0.710475735564615;
     simdata->tyrediameter[3] = 0.710475735564615;
     simdata->abs = .11;
-    for (int x = 0; x < numdevices; x++)
-    {
-        if (devices[x].initialized == true)
-        {
-            devices[x].update(&devices[x], simdata);
-        }
-    }
+    update_devices(devices, numdevices, simdata, testsimmap);
     sleep(3);
 
     fprintf(stdout, "Setting speed to 200\n");
@@ -1189,13 +1171,7 @@ int tester(SimDevice* devices, int numdevices)
     simdata->tyrediameter[3] = -1;
     simdata->abs = 0;
     simdata->velocity = 200;
-    for (int x = 0; x < numdevices; x++)
-    {
-        if (devices[x].initialized == true)
-        {
-            devices[x].update(&devices[x], simdata);
-        }
-    }
+    update_devices(devices, numdevices, simdata, testsimmap);
     sleep(3);
 
     fprintf(stdout, "Yellow Flag!\n");
@@ -1204,24 +1180,12 @@ int tester(SimDevice* devices, int numdevices)
     fprintf(stdout, "Shifting into third gear\n");
     simdata->gear = SIMAPI_GEAR_THIRD;
     simdata->gearc[0] = 0x33;
-    for (int x = 0; x < numdevices; x++)
-    {
-        if (devices[x].initialized == true)
-        {
-            devices[x].update(&devices[x], simdata);
-        }
-    }
+    update_devices(devices, numdevices, simdata, testsimmap);
     sleep(3);
 
     fprintf(stdout, "Setting rpms to 2000\n");
     simdata->rpms = 2000;
-    for (int x = 0; x < numdevices; x++)
-    {
-        if (devices[x].initialized == true)
-        {
-            devices[x].update(&devices[x], simdata);
-        }
-    }
+    update_devices(devices, numdevices, simdata, testsimmap);
     sleep(3);
 
     fprintf(stdout, "Blue Flag!\n");
@@ -1229,47 +1193,23 @@ int tester(SimDevice* devices, int numdevices)
 
     fprintf(stdout, "Setting rpms to 4000\n");
     simdata->rpms = 4000;
-    for (int x = 0; x < numdevices; x++)
-    {
-        if (devices[x].initialized == true)
-        {
-            devices[x].update(&devices[x], simdata);
-        }
-    }
+    update_devices(devices, numdevices, simdata, testsimmap);
     sleep(3);
 
     fprintf(stdout, "Shifting into fourth gear\n");
     simdata->gear = SIMAPI_GEAR_FOURTH;
     simdata->gearc[0] = 0x34;
-    for (int x = 0; x < numdevices; x++)
-    {
-        if (devices[x].initialized == true)
-        {
-            devices[x].update(&devices[x], simdata);
-        }
-    }
+    update_devices(devices, numdevices, simdata, testsimmap);
     sleep(3);
 
     fprintf(stdout, "Setting speed to 300\n");
     simdata->velocity = 300;
-    for (int x = 0; x < numdevices; x++)
-    {
-        if (devices[x].initialized == true)
-        {
-            devices[x].update(&devices[x], simdata);
-        }
-    }
+    update_devices(devices, numdevices, simdata, testsimmap);
     sleep(3);
 
     fprintf(stdout, "Setting rpms to 7000\n");
     simdata->rpms = 7000;
-    for (int x = 0; x < numdevices; x++)
-    {
-        if (devices[x].initialized == true)
-        {
-            devices[x].update(&devices[x], simdata);
-        }
-    }
+    update_devices(devices, numdevices, simdata, testsimmap);
     sleep(3);
 
     fprintf(stdout, "Red Flag!\n");
@@ -1277,22 +1217,10 @@ int tester(SimDevice* devices, int numdevices)
 
     fprintf(stdout, "Setting rpms to 8000\n");
     simdata->rpms = 8000;
-    for (int x = 0; x < numdevices; x++)
-    {
-        if (devices[x].initialized == true)
-        {
-            devices[x].update(&devices[x], simdata);
-        }
-    }
+    update_devices(devices, numdevices, simdata, testsimmap);
     for(int x = 0; x < 100; x++)
     {
-        for (int x = 0; x < numdevices; x++)
-        {
-            if (devices[x].initialized == true)
-            {
-                devices[x].update(&devices[x], simdata);
-            }
-        }
+        update_devices(devices, numdevices, simdata, testsimmap);
     }
     sleep(3);
 
@@ -1300,17 +1228,29 @@ int tester(SimDevice* devices, int numdevices)
     simdata->rpms = 100;
     simdata->gear = SIMAPI_GEAR_NEUTRAL;
     simdata->gearc[0] = 0x4e;
-    for (int x = 0; x < numdevices; x++)
-    {
-        if (devices[x].initialized == true)
-        {
-            devices[x].update(&devices[x], simdata);
-        }
-    }
+    update_devices(devices, numdevices, simdata, testsimmap);
     sleep(1);
 
     fflush(stdout);
     tcsetattr(0, TCSANOW, &canonicalmode);
+
+    // Not shm_unlink()'d - the segment itself stays behind, the same way a
+    // real sim's shared memory file stays around after that sim exits - but
+    // its *contents* are reset to an inactive frame first. Leaving the last
+    // active-play frame in place made every external reader (e.g.
+    // typiql-tauri) see this test run as a sim that's still actively
+    // driving forever, since nothing else ever writes to SIMAPI.DAT again
+    // until the next `monocoque test`/`monocoque play`.
+    if (testsimmap != NULL)
+    {
+        simdata->simon = false;
+        simdata->simstatus = SIMAPI_STATUS_OFF;
+        update_devices(devices, numdevices, simdata, testsimmap);
+
+        munmap(testsimmap->addr, sizeof(SimData));
+        close(testsimmap->fd);
+        free(testsimmap);
+    }
 
     free(simdata);
 
